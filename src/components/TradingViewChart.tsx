@@ -77,6 +77,20 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    setBrokerSource('default');
+  }, [currentSymbol]);
+
+  useEffect(() => {
+    setCustomTextLabel((prev) =>
+      prev === 'Entry / POI' || prev === 'Entrada / POI'
+        ? isEn
+          ? 'Entry / POI'
+          : 'Entrada / POI'
+        : prev
+    );
+  }, [isEn]);
+
+  useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(drawings));
     } catch {
@@ -661,7 +675,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
           } ${activeTool !== 'cursor' ? 'cursor-crosshair' : ''}`}
         >
           <iframe
-            key={`${activeTvSymbol}-${timeframe}-${tvLocale}-${isDrawMenuOpen}`}
+            key={`${activeTvSymbol}-${timeframe}-${tvLocale}-${tvTheme}-${isDrawMenuOpen}`}
             src={widgetUrl}
             className="w-full h-full border-0"
             title={`TradingView ${currentSymbol} (${activeTvSymbol})`}

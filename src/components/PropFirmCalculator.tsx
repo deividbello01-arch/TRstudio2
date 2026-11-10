@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, ShieldAlert, CheckCircle2, AlertTriangle, DollarSign } from 'lucide-react';
-import { AppLanguage, InstrumentMarketMode } from '../types/trading';
+import { Calculator, ShieldAlert, CheckCircle2, AlertTriangle, DollarSign, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { AppLanguage, InstrumentMarketMode, InstrumentQuote, MT5SessionState } from '../types/trading';
 import {
   TRADEABLE_INSTRUMENTS,
   getSpec,
+  quoteToUsd,
   valuePerPointUsd,
+  roundToTick,
   DEFAULT_FX_RATES,
   FxRates,
   FUTURES_CONTRACT_MAP,
   getEnabledTradeableInstruments,
 } from '../lib/instruments';
+import { MT5OneClickBar } from './MT5OneClickBar';
 
 interface PropFirmCalculatorProps {
   language?: AppLanguage;
@@ -18,6 +21,10 @@ interface PropFirmCalculatorProps {
   fxRates?: FxRates;
   marketMode?: InstrumentMarketMode;
   enabledSymbols?: string[];
+  instruments?: InstrumentQuote[];
+  mt5State?: MT5SessionState | null;
+  onRefreshMt5?: () => Promise<void>;
+  onOpenMt5Hub?: () => void;
 }
 
 export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
@@ -27,12 +34,18 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
   fxRates = DEFAULT_FX_RATES,
   marketMode = 'all_programmed',
   enabledSymbols,
+  instruments = [],
+  mt5State = null,
+  onRefreshMt5 = async () => {},
+  onOpenMt5Hub,
 }) => {
   const isEn = language === 'en';
   const visibleInstruments = getEnabledTradeableInstruments(enabledSymbols, marketMode);
   const [balance, setBalance] = useState<number>(defaultBalance || 10000);
   const [riskPercent, setRiskPercent] = useState<number>(defaultRisk || 0.50);
   const [selectedAsset, setSelectedAsset] = useState<string>('NAS100');
+  const [direction, setDirection] = useState<'BUY' | 'SELL'>('BUY');
+  const [customEntryPrice, setCustomEntryPrice] = useState<number | ''>('');
   const [stopDistance, setStopDistance] = useState<number>(40);
   const [brokerMultiplier, setBrokerMultiplier] = useState<number>(1); // 1x or 10x for CFDs
   const [futuresContractType, setFuturesContractType] = useState<'micro' | 'standard'>('micro');
@@ -90,8 +103,7 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
     const useMicro = futuresContractType === 'micro' && futuresSpec.microTicker;
     const activeTicker = useMicro ? futuresSpec.microTicker! : futuresSpec.futuresTicker;
     const rawPtVal = useMicro && futuresSpec.microPointValue ? futuresSpec.microPointValue : futuresSpec.stdPointValue;
-    const ccyRate =
-      spec.quoteCcy === 'USD' ? 1 : fxRates[spec.quoteCcy as keyof FxRates] || 1;
+    const ccyRate = quoteToUsd(spec.quoteCcy, fxRates);
     // For EURUSD futures (6E/M6E), stdPointValue is 125000 EUR ($12.50 per pip) or 12500 EUR ($1.25 per pip)
     usdRiskPerUnitPerLot =
       spec.symbol === 'EURUSD' ? (rawPtVal * 0.0001) : rawPtVal * ccyRate;
@@ -149,6 +161,19 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
   const profitAtTp1 = actualMonetaryLossAtStop * rewardRatio1;
   const profitAtTp2 = actualMonetaryLossAtStop * rewardRatio2;
   const isMinLotWarning = actualMonetaryLossAtStop > targetMonetaryRisk * 1.15;
+
+  // Live or custom Entry Price & Price Coordinates for 1-Click MT5 Execution
+  const liveFeedInst = instruments.find((i) => i.symbol === spec.symbol);
+  const feedPrice = liveFeedInst?.price || spec.fallback.price;
+  const entryPrice =
+    customEntryPrice !== '' && Number(customEntryPrice) > 0
+      ? roundToTick(Number(customEntryPrice), spec)
+      : roundToTick(feedPrice, spec);
+  const dirMult = direction === 'BUY' ? 1 : -1;
+  const priceStopDelta = spec.symbol === 'EURUSD' ? safeStop * 0.0001 : safeStop;
+  const stopLossPrice = roundToTick(entryPrice - dirMult * priceStopDelta, spec);
+  const tp1Price = roundToTick(entryPrice + dirMult * priceStopDelta * rewardRatio1, spec);
+  const tp2Price = roundToTick(entryPrice + dirMult * priceStopDelta * rewardRatio2, spec);
 
   return (
     <div className="space-y-6">
@@ -257,6 +282,7 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
                 setSelectedAsset(ast);
                 setStopDistance(defaultStopMap[ast] || 35);
                 setBrokerMultiplier(1);
+                setCustomEntryPrice('');
               }}
               className="w-full bg-[#120c08] border border-[#3b271a] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-500 font-bold"
             >
@@ -373,18 +399,26 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
         ) : null}
       </div>
 
-      {/* Warning if 0.01 minimum lot exceeds target risk */}
+      {/* Warning if 0.01 minimum lot or 1 minimum contract exceeds target risk */}
       {isMinLotWarning && (
         <div className="p-4 rounded-xl bg-amber-950/50 border border-amber-500/70 text-xs font-mono flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
           <div>
             <div className="font-bold text-amber-300 uppercase">
-              {isEn
+              {isFuturesMode
+                ? isEn
+                  ? 'Minimum Futures Contract (1 Contract) Risk Notice'
+                  : 'Aviso Importante sobre Contrato Mínimo (1 Contrato)'
+                : isEn
                 ? 'Minimum Lot Size (0.01) Risk Notice'
                 : 'Aviso Importante sobre Lote Mínimo (0.01 Lotes)'}
             </div>
             <p className="text-amber-100/90 mt-1 font-sans">
-              {isEn
+              {isFuturesMode
+                ? isEn
+                  ? `Your target ${safeRiskPct}% risk is $${targetMonetaryRisk.toFixed(2)} USD, which would require ${rawLots.toFixed(2)} contracts. Because the minimum position in Futures is 1 integer contract, executing 1 contract with a ${safeStop} ${unitLabel} Stop Loss will actually risk -$${actualMonetaryLossAtStop.toFixed(2)} USD (${actualRiskPercentOfAccount.toFixed(2)}% of your balance). Switch to a Micro contract or tighten the Stop Loss.`
+                  : `Tu riesgo deseado del ${safeRiskPct}% equivale a $${targetMonetaryRisk.toFixed(2)} USD (requeriría ${rawLots.toFixed(2)} contratos). Como el tamaño mínimo en Futuros es 1 contrato entero, al abrir 1 contrato con ${safeStop} ${unitLabel} de Stop Loss tu pérdida real si toca SL será de -$${actualMonetaryLossAtStop.toFixed(2)} USD (${actualRiskPercentOfAccount.toFixed(2)}% de tu cuenta). Usa contrato Micro o ajusta el Stop Loss.`
+                : isEn
                 ? `Your target ${safeRiskPct}% risk is $${targetMonetaryRisk.toFixed(2)} USD, which would require ${rawLots.toFixed(3)} lots. Because MetaTrader/cTrader minimum lot is 0.01, executing 0.01 lots with a ${safeStop} ${unitLabel} Stop Loss will actually risk -$${actualMonetaryLossAtStop.toFixed(2)} USD (${actualRiskPercentOfAccount.toFixed(2)}% of your balance). Tighten the Stop Loss or use a standard 1x CFD contract.`
                 : `Tu riesgo deseado del ${safeRiskPct}% equivale a $${targetMonetaryRisk.toFixed(2)} USD (requeriría ${rawLots.toFixed(3)} lotes). Como el lote mínimo en MT5/cTrader es 0.01, al abrir 0.01 lotes con ${safeStop} ${unitLabel} de Stop Loss tu pérdida real si toca SL será de -$${actualMonetaryLossAtStop.toFixed(2)} USD (${actualRiskPercentOfAccount.toFixed(2)}% de tu cuenta).`}
             </p>
@@ -397,12 +431,24 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
         {/* Main Lot & Exact Dollar Loss Card */}
         <div className="bg-gradient-to-br from-[#2b1c13] via-[#18110b] to-[#120c08] border border-amber-500/60 rounded-xl p-5 shadow-xl">
           <div className="text-xs uppercase font-mono tracking-wider text-amber-300 font-bold mb-1">
-            {isEn ? 'Recommended Lot Size' : 'Lotaje Exacto a Ingresar'}
+            {isFuturesMode
+              ? isEn
+                ? 'Recommended Contracts'
+                : 'Contratos Exactos a Ingresar'
+              : isEn
+              ? 'Recommended Lot Size'
+              : 'Lotaje Exacto a Ingresar'}
           </div>
           <div className="text-4xl font-black font-mono text-white mt-1">
             {finalLots}{' '}
             <span className="text-sm font-normal text-amber-200/70">
-              {isEn ? 'Lots' : 'Lotes'}
+              {isFuturesMode
+                ? isEn
+                  ? 'Contracts'
+                  : 'Contratos'
+                : isEn
+                ? 'Lots'
+                : 'Lotes'}
             </span>
           </div>
 
@@ -437,8 +483,8 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
 
           <div className="mt-3 text-[11px] font-mono text-amber-200/60">
             {isEn
-              ? `Formula: ${finalLots} Lots × ${safeStop} ${unitLabel} × $${usdRiskPerUnitPerLot.toFixed(2)}/unit = -$${actualMonetaryLossAtStop.toFixed(2)} USD`
-              : `Verificación: ${finalLots} Lotes × ${safeStop} ${unitLabel} × $${usdRiskPerUnitPerLot.toFixed(2)} = -$${actualMonetaryLossAtStop.toFixed(2)} USD`}
+              ? `Formula: ${finalLots} ${isFuturesMode ? 'Contracts' : 'Lots'} × ${safeStop} ${unitLabel} × $${usdRiskPerUnitPerLot.toFixed(2)}/unit = -$${actualMonetaryLossAtStop.toFixed(2)} USD`
+              : `Verificación: ${finalLots} ${isFuturesMode ? 'Contratos' : 'Lotes'} × ${safeStop} ${unitLabel} × $${usdRiskPerUnitPerLot.toFixed(2)} = -$${actualMonetaryLossAtStop.toFixed(2)} USD`}
           </div>
         </div>
 
@@ -528,6 +574,122 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Price Coordinates & 1-Click MT5 Execution directly from Lot Calculator */}
+      <div className="bg-[#18110b] border border-[#3b271a] rounded-xl p-5 shadow-xl space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xs sm:text-sm font-bold font-mono uppercase text-white">
+              {isEn
+                ? `Direct MT5 Order Coordinates for ${spec.symbol} (${finalLots} ${isFuturesMode ? 'Contracts' : 'Lots'})`
+                : `Coordenadas de Orden y Ejecución Directa en MT5 para ${spec.symbol} (${finalLots} ${isFuturesMode ? 'Contratos' : 'Lotes'})`}
+            </h3>
+            <p className="text-[11px] text-amber-200/60">
+              {isEn
+                ? 'Choose BUY or SELL and optional Entry Price to execute this exact lot size, SL, TP1, and TP2 in your MT5 session.'
+                : 'Elige Compra o Venta y el precio de entrada (en vivo o personalizado) para ejecutar este lotaje exacto, SL, TP1 y TP2 directo en tu sesión MT5.'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+            <button
+              type="button"
+              onClick={() => setDirection('BUY')}
+              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 border transition ${
+                direction === 'BUY'
+                  ? 'bg-emerald-600 text-white border-emerald-400 shadow'
+                  : 'bg-[#120c08] text-amber-200/70 border-[#3b271a]'
+              }`}
+            >
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              <span>{isEn ? 'BUY / LONG' : 'COMPRA (BUY)'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDirection('SELL')}
+              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 border transition ${
+                direction === 'SELL'
+                  ? 'bg-rose-600 text-white border-rose-400 shadow'
+                  : 'bg-[#120c08] text-amber-200/70 border-[#3b271a]'
+              }`}
+            >
+              <ArrowDownRight className="w-3.5 h-3.5" />
+              <span>{isEn ? 'SELL / SHORT' : 'VENTA (SELL)'}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
+          <div className="p-2.5 rounded-xl bg-[#120c08] border border-[#3b271a]">
+            <label className="text-[10px] uppercase text-amber-200/60 block mb-1">
+              {isEn ? 'Entry Price (Live / Custom)' : 'Precio Entrada (Vivo / Manual)'}
+            </label>
+            <input
+              type="number"
+              step="any"
+              value={customEntryPrice !== '' ? customEntryPrice : entryPrice}
+              onChange={(e) => {
+                const v = e.target.value;
+                setCustomEntryPrice(v === '' ? '' : parseFloat(v));
+              }}
+              className="w-full bg-[#18110b] border border-[#3b271a] rounded-lg px-2.5 py-1 text-xs font-bold text-white focus:outline-none focus:border-amber-500"
+            />
+          </div>
+          <div className="p-2.5 rounded-xl bg-[#120c08] border border-rose-800/50">
+            <span className="text-[10px] uppercase text-rose-400 block mb-1">
+              Stop Loss ({safeStop} {unitLabel})
+            </span>
+            <span className="text-sm font-black text-rose-300 block">
+              {stopLossPrice.toFixed(spec.decimals)}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-[#120c08] border border-emerald-800/50">
+            <span className="text-[10px] uppercase text-emerald-400 block mb-1">
+              Take Profit 1 (1:{rewardRatio1})
+            </span>
+            <span className="text-sm font-black text-emerald-300 block">
+              {tp1Price.toFixed(spec.decimals)}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-[#120c08] border border-emerald-800/50">
+            <span className="text-[10px] uppercase text-emerald-400 block mb-1">
+              Take Profit 2 (1:{rewardRatio2})
+            </span>
+            <span className="text-sm font-black text-emerald-400 block">
+              {tp2Price.toFixed(spec.decimals)}
+            </span>
+          </div>
+        </div>
+
+        <MT5OneClickBar
+          setup={{
+            asset: spec.symbol,
+            action: direction,
+            playbookName: isEn
+              ? `Quant Lot Calculator (${safeRiskPct}% Risk)`
+              : `Calculadora Cuantitativa (${safeRiskPct}% Riesgo)`,
+            prices: {
+              currentPrice: roundToTick(feedPrice, spec),
+              entryPrice,
+              stopLoss: stopLossPrice,
+              takeProfit1: tp1Price,
+              takeProfit2: tp2Price,
+            },
+            propFirmRiskCalculation: {
+              accountBalance: safeBalance,
+              recommendedLots: finalLots,
+              riskPercentage: safeRiskPct,
+              monetaryRiskUsd: Number(targetMonetaryRisk.toFixed(2)),
+              actualRiskAtStopUsd: Number(actualMonetaryLossAtStop.toFixed(2)),
+            },
+          }}
+          mt5State={mt5State}
+          onRefreshMt5={onRefreshMt5}
+          onOpenMt5Hub={onOpenMt5Hub}
+          language={language}
+          compact
+        />
       </div>
     </div>
   );

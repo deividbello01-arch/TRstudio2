@@ -57,6 +57,36 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    if (initialAsset) {
+      setSelectedAsset(initialAsset);
+    }
+  }, [initialAsset]);
+
+  useEffect(() => {
+    if (
+      visibleInstruments.length > 0 &&
+      !visibleInstruments.some((i) => i.symbol === selectedAsset)
+    ) {
+      setSelectedAsset(visibleInstruments[0].symbol);
+    }
+  }, [enabledSymbols]);
+
+  useEffect(() => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === 'welcome-msg'
+          ? {
+              ...m,
+              content: isEn
+                ? 'Hello! I am **Gemini**, a general-purpose AI assistant. You can ask me anything you need (general questions, explanations, calculations, summaries, or ideas), and if you ask about economic news (CPI, NFP, FOMC, interest rates, yields) or markets, I also have live context to answer.'
+                : '¡Hola! Soy **Gemini**, una inteligencia artificial de propósito general. Puedes preguntarme cualquier tema, duda general, cálculo, resumen o explicación; y si me preguntas sobre noticias económicas (CPI, NFP, FOMC, tasas de interés) o mercados, también cuento con contexto en tiempo real para responderte.',
+            }
+          : m
+      )
+    );
+  }, [isEn]);
+
+  useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 

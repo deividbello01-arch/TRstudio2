@@ -11,8 +11,19 @@ import {
   Newspaper,
   Radar,
   Award,
+  Terminal,
 } from 'lucide-react';
-import { KillzoneSession, AppSettings } from '../types/trading';
+import { KillzoneSession, AppSettings, AppTheme, MT5SessionState } from '../types/trading';
+
+const QUICK_THEMES: { id: AppTheme; label: string; bg: string; dot: string }[] = [
+  { id: 'cream', label: 'Blanco Crema', bg: '#f6efe2', dot: '#b45309' },
+  { id: 'obsidian', label: 'Negro Dorado', bg: '#0c0c0e', dot: '#facc15' },
+  { id: 'midnight', label: 'Azul Cyan', bg: '#0b1220', dot: '#38bdf8' },
+  { id: 'coffee', label: 'Café Ámbar', bg: '#18110b', dot: '#f59e0b' },
+  { id: 'emerald', label: 'Verde Matrix', bg: '#081712', dot: '#34d399' },
+  { id: 'mint', label: 'Menta Turquesa', bg: '#08191e', dot: '#2dd4bf' },
+  { id: 'crimson', label: 'Burdeos Coral', bg: '#1a0b10', dot: '#fb7185' },
+];
 
 interface NavbarProps {
   activeTab: string;
@@ -21,7 +32,9 @@ interface NavbarProps {
   activeDocsCount: number;
   totalDocsCount: number;
   settings: AppSettings;
+  onUpdateSettings?: (partial: Partial<AppSettings>) => void;
   onOpenSettings: () => void;
+  mt5State?: MT5SessionState | null;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -31,7 +44,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeDocsCount,
   totalDocsCount,
   settings,
+  onUpdateSettings,
   onOpenSettings,
+  mt5State,
 }) => {
   const [nyTime, setNyTime] = useState<string>('');
   const [nextSectionBadge, setNextSectionBadge] = useState<string>('');
@@ -132,6 +147,14 @@ export const Navbar: React.FC<NavbarProps> = ({
     return () => clearInterval(interval);
   }, [isEn, is12h]);
 
+  const openMt5Count = mt5State?.openPositions?.length || 0;
+  const mt5Badge =
+    openMt5Count > 0
+      ? `${openMt5Count} LIVE`
+      : mt5State?.connected
+      ? 'ON'
+      : undefined;
+
   const allNavItems = [
     { id: 'terminal', label: isEn ? 'Terminal' : 'Terminal', icon: Activity, visible: true },
     {
@@ -141,6 +164,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       visible: settings.showScannerTab ?? true,
     },
     { id: 'entries', label: isEn ? 'Request Entries' : 'Pedir Entradas', icon: Compass, visible: true },
+    {
+      id: 'mt5',
+      label: isEn ? 'MT5 Live' : 'MT5 En Vivo',
+      icon: Terminal,
+      badge: mt5Badge,
+      visible: settings.showMt5Tab ?? true,
+    },
     {
       id: 'strategies',
       label: isEn ? 'Strategies' : 'Estrategias',
@@ -243,16 +273,35 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Mobile Settings Button (visible on < lg) */}
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            title={isEn ? 'Settings & Customization' : 'Configuración y Personalización'}
-            className="lg:hidden px-2.5 py-1.5 rounded-lg bg-[#24170f] hover:bg-[#332116] text-amber-300 hover:text-white border border-[#4d3221] hover:border-amber-500 transition flex items-center gap-1.5 text-xs font-mono shrink-0"
-          >
-            <Settings className="w-4 h-4 text-amber-400" />
-            <span>{isEn ? 'Settings' : 'Ajustes'}</span>
-          </button>
+          {/* Mobile MT5 Status & Settings Button (visible on < lg) */}
+          <div className="flex lg:hidden items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab('mt5')}
+              className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 transition shrink-0 ${
+                mt5State?.connected
+                  ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/60'
+                  : 'bg-[#24170f] text-amber-300 border-[#4d3221]'
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  mt5State?.connected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'
+                }`}
+              />
+              <Terminal className="w-3.5 h-3.5" />
+              <span>MT5</span>
+            </button>
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              title={isEn ? 'Settings & Customization' : 'Configuración y Personalización'}
+              className="px-2.5 py-1.5 rounded-lg bg-[#24170f] hover:bg-[#332116] text-amber-300 hover:text-white border border-[#4d3221] hover:border-amber-500 transition flex items-center gap-1.5 text-xs font-mono shrink-0"
+            >
+              <Settings className="w-4 h-4 text-amber-400" />
+              <span>{isEn ? 'Settings' : 'Ajustes'}</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center justify-between lg:justify-end gap-1.5 w-full min-w-0">
@@ -282,16 +331,77 @@ export const Navbar: React.FC<NavbarProps> = ({
             })}
           </nav>
 
-          {/* Desktop Settings Gear Button */}
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            title={isEn ? 'Settings & Customization' : 'Configuración y Personalización'}
-            className="hidden lg:flex p-2 rounded-lg bg-[#24170f] hover:bg-[#332116] text-amber-300 hover:text-white border border-[#4d3221] hover:border-amber-500 transition items-center gap-1.5 text-xs font-mono shrink-0"
-          >
-            <Settings className="w-4 h-4 text-amber-400" />
-            <span>{isEn ? 'Settings' : 'Ajustes'}</span>
-          </button>
+          {/* Desktop Quick 7-Theme Dots + MT5 Connection Status Button + Settings Button */}
+          <div className="hidden lg:flex items-center gap-1.5 shrink-0">
+            {onUpdateSettings && (
+              <div
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#120c08] border border-[#3b271a]"
+                title={isEn ? 'Quick 1-Click Color Theme Switcher' : 'Cambiar Tema de Color (1 Clic)'}
+              >
+                {QUICK_THEMES.map((t) => {
+                  const isCurrent = settings.theme === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => onUpdateSettings({ theme: t.id })}
+                      title={t.label}
+                      className={`w-4 h-4 rounded-full flex items-center justify-center transition-transform ${
+                        isCurrent ? 'scale-125 ring-2 ring-amber-400' : 'opacity-75 hover:opacity-100 hover:scale-110'
+                      }`}
+                      style={{ backgroundColor: t.bg, border: `1.5px solid ${t.dot}` }}
+                    >
+                      <span
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ backgroundColor: t.dot }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('mt5')}
+              title={
+                mt5State?.connected
+                  ? `MT5 Activo: ${mt5State.brokerServer} (#${mt5State.login})`
+                  : isEn
+                  ? 'Open MT5 Broker Session & Auto-Execution'
+                  : 'Abrir Sesión de Broker MT5 y Auto-Ejecución'
+              }
+              className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 transition shrink-0 ${
+                mt5State?.connected
+                  ? 'bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 border-emerald-500/70'
+                  : 'bg-[#24170f] hover:bg-[#332116] text-amber-300 border-[#4d3221] hover:border-amber-500'
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  mt5State?.connected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'
+                }`}
+              />
+              <Terminal className="w-3.5 h-3.5" />
+              <span>
+                {mt5State?.connected
+                  ? `MT5: ${mt5State.brokerPreset}`
+                  : isEn
+                  ? 'Connect MT5'
+                  : 'Conectar MT5'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              title={isEn ? 'Settings & Customization' : 'Configuración y Personalización'}
+              className="p-2 rounded-lg bg-[#24170f] hover:bg-[#332116] text-amber-300 hover:text-white border border-[#4d3221] hover:border-amber-500 transition flex items-center gap-1.5 text-xs font-mono shrink-0"
+            >
+              <Settings className="w-4 h-4 text-amber-400" />
+              <span>{isEn ? 'Settings' : 'Ajustes'}</span>
+            </button>
+          </div>
         </div>
       </div>
     </header>

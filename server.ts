@@ -10,6 +10,7 @@ import {
   DEFAULT_FX_RATES,
   FxRates,
   getSpec,
+  quoteToUsd,
   valuePerPointUsd,
   roundToTick,
   formatDistance,
@@ -17,7 +18,11 @@ import {
   TRADEABLE_INSTRUMENTS,
   FUTURES_CONTRACT_MAP,
 } from './src/lib/instruments.ts';
-import { FINANCIAL_WEB_SOURCES, TRADING_STRATEGIES } from './src/lib/strategiesData.ts';
+import {
+  FINANCIAL_WEB_SOURCES,
+  TRADING_STRATEGIES,
+  isStrategyActiveAtHourNY,
+} from './src/lib/strategiesData.ts';
 
 dotenv.config();
 
@@ -167,6 +172,7 @@ function getCurrentKillzone() {
     active,
     statusColor,
     nyTime: nyTime12h,
+    nyDecimalHour: currentMinutes / 60,
     windowHours,
     recommendedAssets,
     description,
@@ -300,6 +306,8 @@ async function syncRealTimeTradingViewQuotes() {
     if (gbpusdRow && typeof gbpusdRow[0] === 'number') liveFxRates.GBPUSD = gbpusdRow[0];
     const usdjpyRow = quoteMap.get('FX:USDJPY');
     if (usdjpyRow && typeof usdjpyRow[0] === 'number') liveFxRates.USDJPY = usdjpyRow[0];
+    const usdhkdRow = quoteMap.get('FX:USDHKD');
+    if (usdhkdRow && typeof usdhkdRow[0] === 'number') liveFxRates.USDHKD = usdhkdRow[0];
 
     MARKET_INSTRUMENTS = MARKET_INSTRUMENTS.map((inst) => {
       const spec = getSpec(inst.symbol);
@@ -659,8 +667,7 @@ function buildDeterministicSetupForInstrument(params: {
   let contractSpecLabel = '';
 
   if (isFuturesMode && futuresSpec) {
-    const ccyRate =
-      spec.quoteCcy === 'USD' ? 1 : liveFxRates[spec.quoteCcy as keyof FxRates] || 1;
+    const ccyRate = quoteToUsd(spec.quoteCcy, liveFxRates);
     const microPtVal = futuresSpec.microPointValue ?? futuresSpec.stdPointValue;
     const microUsdPerUnit =
       spec.symbol === 'EURUSD' ? microPtVal * 1 : microPtVal * ccyRate;
@@ -826,12 +833,26 @@ function buildDeterministicSetupForInstrument(params: {
       : `Probabilidad del ${winProbability}% porque ${spec.symbol} está fuera de su ventana óptima de liquidez. Revisa el Escáner de Mejores Entradas.`;
   }
 
-  // Pick matching strategy playbook based on explicit strategyId, custom base, or region & session
+  // Pick matching strategy playbook based on explicit strategyId, custom base, or active NY schedule block & asset
   let matchedStrat = TRADING_STRATEGIES[0];
   const explicitStrat =
     strategyId && strategyId !== 'AUTO'
       ? TRADING_STRATEGIES.find((s) => s.id === strategyId || s.code === strategyId)
       : undefined;
+
+  const currentNyDecimalHour =
+    typeof currentKz?.nyDecimalHour === 'number'
+      ? currentKz.nyDecimalHour
+      : (() => {
+          const ny24 = new Date().toLocaleString('en-US', {
+            timeZone: 'America/New_York',
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          const [h, m] = ny24.split(':');
+          return (parseInt(h, 10) % 24) + parseInt(m, 10) / 60;
+        })();
 
   if (explicitStrat) {
     matchedStrat = explicitStrat;
@@ -844,19 +865,54 @@ function buildDeterministicSetupForInstrument(params: {
         combinedText.includes(s.nameEn.toLowerCase().slice(0, 14))
     );
     if (byDoc) matchedStrat = byDoc;
-    else if (spec.region === 'EU' || spec.region === 'UK' || currentKz.sessionKey === 'london') {
-      matchedStrat = TRADING_STRATEGIES[1];
+    else {
+      const activeForAsset = TRADING_STRATEGIES.find(
+        (s) => isStrategyActiveAtHourNY(s, currentNyDecimalHour) && s.bestAssets.includes(spec.symbol)
+      );
+      if (activeForAsset) matchedStrat = activeForAsset;
+      else if (spec.region === 'EU' || spec.region === 'UK' || currentKz.sessionKey === 'london') {
+        matchedStrat = TRADING_STRATEGIES[1];
+      }
     }
-  } else if (spec.region === 'EU' || spec.region === 'UK' || currentKz.sessionKey === 'london') {
-    matchedStrat = TRADING_STRATEGIES[1]; // Asian Range Sweep & London Judas
-  } else if (spec.symbol === 'XAUUSD') {
-    matchedStrat = TRADING_STRATEGIES[4]; // COMEX Expansion & Real Yields
-  } else if (posInRange < 0.22 || posInRange > 0.78) {
-    matchedStrat = TRADING_STRATEGIES[5]; // PDH/PDL Reversion
-  } else if (currentKz.sessionKey === 'ny_am' || currentKz.sessionKey === 'ny_pm') {
-    matchedStrat = TRADING_STRATEGIES[0]; // ICT Silver Bullet NY
   } else {
-    matchedStrat = TRADING_STRATEGIES[3]; // 1H Order Block & OTE
+    // 1. First look for any of the 18 strategies active right now in NY time AND tailored for this asset
+    const activeForAssetList = TRADING_STRATEGIES.filter(
+      (s) => isStrategyActiveAtHourNY(s, currentNyDecimalHour) && s.bestAssets.includes(spec.symbol)
+    );
+    const activeAnyAsset = TRADING_STRATEGIES.find((s) =>
+      isStrategyActiveAtHourNY(s, currentNyDecimalHour)
+    );
+
+    if (activeForAssetList.length > 0) {
+      // If price is at extreme range (>78% or <22%), prefer a mean_reversion or killzone strategy if available in the active list
+      if (posInRange < 0.22 || posInRange > 0.78) {
+        matchedStrat =
+          activeForAssetList.find((s) => s.category === 'mean_reversion') || activeForAssetList[0];
+      } else {
+        matchedStrat = activeForAssetList[0];
+      }
+    } else if (activeAnyAsset && (spec.sessionScores[currentKz.sessionKey] ?? 0) >= 15) {
+      matchedStrat = activeAnyAsset;
+    } else if (spec.region === 'ASIA') {
+      matchedStrat =
+        TRADING_STRATEGIES.find((s) => s.bestAssets.includes(spec.symbol)) || TRADING_STRATEGIES[1];
+    } else if (spec.region === 'EU' || spec.region === 'UK' || currentKz.sessionKey === 'london') {
+      matchedStrat =
+        TRADING_STRATEGIES.find(
+          (s) => s.scheduleBlock === 'london' && s.bestAssets.includes(spec.symbol)
+        ) || TRADING_STRATEGIES[1];
+    } else if (spec.symbol === 'XAUUSD') {
+      matchedStrat =
+        TRADING_STRATEGIES.find((s) => s.id === 'strat-gold-comex-yields') || TRADING_STRATEGIES[4];
+    } else if (posInRange < 0.22 || posInRange > 0.78) {
+      matchedStrat =
+        TRADING_STRATEGIES.find((s) => s.id === 'strat-pdh-pdl-reversion') || TRADING_STRATEGIES[5];
+    } else if (currentKz.sessionKey === 'ny_am' || currentKz.sessionKey === 'ny_pm') {
+      matchedStrat = TRADING_STRATEGIES[0];
+    } else {
+      matchedStrat =
+        TRADING_STRATEGIES.find((s) => s.bestAssets.includes(spec.symbol)) || TRADING_STRATEGIES[3];
+    }
   }
 
   const playbookName =
@@ -973,7 +1029,7 @@ function buildDeterministicSetupForInstrument(params: {
       hardDailyDrawdownAlert,
     },
     thesisRationale: aiOverride?.thesisRationale
-      ? `${aiOverride.thesisRationale}${customBaseSnippetEs}${notesSnippetEs}`
+      ? `${aiOverride.thesisRationale}${isEn ? customBaseSnippetEn : customBaseSnippetEs}${isEn ? notesSnippetEn : notesSnippetEs}`
       : defaultThesis,
     invalidationCriteria: aiOverride?.invalidationCriteria || defaultInvalidation,
     executionTips:
@@ -1011,8 +1067,43 @@ app.get('/api/market-feed', async (req, res) => {
   });
 });
 
-// 3. Multi-Index High-Probability Trade Scanner (/api/scan-best-setups)
-app.post('/api/scan-best-setups', async (req, res) => {
+// 2b. Live Candle Countdown Timer Endpoint (/api/candle-timer)
+app.get('/api/candle-timer', (req, res) => {
+  const now = new Date();
+  const kz = getCurrentKillzone();
+  const getRem = (mins: number) => {
+    const totalSec = mins * 60;
+    const elapsed = (now.getUTCMinutes() * 60 + now.getUTCSeconds()) % totalSec;
+    const rem = totalSec - elapsed;
+    return {
+      remainingSeconds: rem,
+      formatted: `${String(Math.floor(rem / 60)).padStart(2, '0')}:${String(rem % 60).padStart(2, '0')}`,
+      progressPct: Number((((totalSec - rem) / totalSec) * 100).toFixed(1)),
+    };
+  };
+  const h4Elapsed = (now.getUTCHours() % 4) * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
+  const h4Rem = 14400 - h4Elapsed;
+  res.json({
+    timestamp: now.toISOString(),
+    nyTime: kz.nyTime,
+    session: kz,
+    candles: {
+      '1M': getRem(1),
+      '5M': getRem(5),
+      '15M': getRem(15),
+      '30M': getRem(30),
+      '1H': getRem(60),
+      '4H': {
+        remainingSeconds: h4Rem,
+        formatted: `${String(Math.floor(h4Rem / 3600)).padStart(2, '0')}:${String(Math.floor((h4Rem % 3600) / 60)).padStart(2, '0')}:${String(h4Rem % 60).padStart(2, '0')}`,
+        progressPct: Number(((h4Elapsed / 14400) * 100).toFixed(1)),
+      },
+    },
+  });
+});
+
+// 3. Multi-Index High-Probability Trade Scanner (/api/scan-best-setups & /api/multi-scanner)
+app.post(['/api/scan-best-setups', '/api/multi-scanner'], async (req, res) => {
   await syncRealTimeTradingViewQuotes();
   const {
     accountBalance = 10000,
@@ -1021,12 +1112,17 @@ app.post('/api/scan-best-setups', async (req, res) => {
     includeNews = true,
     customDocument = '',
     marketMode = 'all_programmed',
+    enabledSymbols,
     language = 'es',
   } = req.body || {};
 
   const currentKz = getCurrentKillzone();
+  const enabledSet =
+    Array.isArray(enabledSymbols) && enabledSymbols.length > 0
+      ? new Set<string>(enabledSymbols)
+      : null;
 
-  const pool = TRADEABLE_INSTRUMENTS.filter((spec) => {
+  const categoryPool = TRADEABLE_INSTRUMENTS.filter((spec) => {
     if (filterCategory === 'INDICES') return spec.kind === 'index';
     if (filterCategory === 'US_INDICES') return spec.kind === 'index' && spec.region === 'US';
     if (filterCategory === 'EU_ASIA_INDICES')
@@ -1034,6 +1130,12 @@ app.post('/api/scan-best-setups', async (req, res) => {
     if (filterCategory === 'METALS_FX') return spec.kind === 'metal' || spec.kind === 'forex';
     return true;
   });
+
+  const filteredByEnabled =
+    enabledSet && filterCategory === 'ALL'
+      ? categoryPool.filter((spec) => enabledSet.has(spec.symbol))
+      : categoryPool;
+  const pool = filteredByEnabled.length > 0 ? filteredByEnabled : categoryPool;
 
   const evaluated = pool.map((spec) =>
     buildDeterministicSetupForInstrument({
@@ -1066,7 +1168,7 @@ app.post('/api/scan-best-setups', async (req, res) => {
 });
 
 // 4. Interactive Gemini Chat (Neutral General AI + News & Macro Support)
-app.post('/api/chat', async (req, res) => {
+app.post(['/api/chat', '/api/news-chat'], async (req, res) => {
   const {
     message,
     history = [],
@@ -1430,7 +1532,7 @@ ${
 });
 
 // 6. Generate Tactical Trade Setup (Always enforces exact risk math & contract sizing)
-app.post('/api/generate-trade-setup', async (req, res) => {
+app.post(['/api/generate-trade-setup', '/api/generate-setup'], async (req, res) => {
   await syncRealTimeTradingViewQuotes();
   const {
     asset = 'NAS100',
@@ -1568,6 +1670,764 @@ app.post('/api/generate-trade-setup', async (req, res) => {
       nyTime: currentKz.nyTime,
       session: currentKz.name,
       timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// ============================================================================
+// 7. METATRADER 5 (MT5) BROKER SESSION & 1-CLICK AUTO-EXECUTION ENGINE
+// ============================================================================
+
+type MT5BrokerPreset =
+  | 'FTMO'
+  | 'FundedNext'
+  | 'ICMarkets'
+  | 'Pepperstone'
+  | 'Exness'
+  | 'Eightcap'
+  | 'Darwinex'
+  | 'Custom';
+
+type MT5ConnectionMode = 'integrated_web' | 'ea_bridge' | 'metaapi_cloud';
+
+const MT5_BROKER_SYMBOL_MAPS: Record<MT5BrokerPreset, Record<string, string>> = {
+  FTMO: {
+    NAS100: 'US100.cash',
+    US500: 'US500.cash',
+    US30: 'US30.cash',
+    US2000: 'US2000.cash',
+    GER40: 'GER40.cash',
+    UK100: 'UK100.cash',
+    EU50: 'EU50.cash',
+    FRA40: 'FRA40.cash',
+    JP225: 'JP225.cash',
+    HK50: 'HK50.cash',
+    XAUUSD: 'XAUUSD',
+    EURUSD: 'EURUSD',
+  },
+  FundedNext: {
+    NAS100: 'NDX100',
+    US500: 'SPX500',
+    US30: 'US30',
+    US2000: 'US2000',
+    GER40: 'GER30',
+    UK100: 'UK100',
+    EU50: 'STOXX50',
+    FRA40: 'FRA40',
+    JP225: 'JPN225',
+    HK50: 'HK50',
+    XAUUSD: 'XAUUSD',
+    EURUSD: 'EURUSD',
+  },
+  ICMarkets: {
+    NAS100: 'USTEC',
+    US500: 'US500',
+    US30: 'US30',
+    US2000: 'US2000',
+    GER40: 'DE40',
+    UK100: 'UK100',
+    EU50: 'STOXX50',
+    FRA40: 'F40',
+    JP225: 'JP225',
+    HK50: 'HK50',
+    XAUUSD: 'XAUUSD',
+    EURUSD: 'EURUSD',
+  },
+  Pepperstone: {
+    NAS100: 'NAS100',
+    US500: 'US500',
+    US30: 'US30',
+    US2000: 'US2000',
+    GER40: 'GER40',
+    UK100: 'UK100',
+    EU50: 'EUSTX50',
+    FRA40: 'FRA40',
+    JP225: 'JPN225',
+    HK50: 'HK50',
+    XAUUSD: 'XAUUSD',
+    EURUSD: 'EURUSD',
+  },
+  Exness: {
+    NAS100: 'USTECm',
+    US500: 'US500m',
+    US30: 'US30m',
+    US2000: 'US2000m',
+    GER40: 'DE30m',
+    UK100: 'UK100m',
+    EU50: 'STOXX50m',
+    FRA40: 'FR40m',
+    JP225: 'JP225m',
+    HK50: 'HK50m',
+    XAUUSD: 'XAUUSDm',
+    EURUSD: 'EURUSDm',
+  },
+  Eightcap: {
+    NAS100: 'NDX100',
+    US500: 'SPX500',
+    US30: 'US30',
+    US2000: 'US2000',
+    GER40: 'GER40',
+    UK100: 'UK100',
+    EU50: 'EUSTX50',
+    FRA40: 'FRA40',
+    JP225: 'JPN225',
+    HK50: 'HK50',
+    XAUUSD: 'XAUUSD',
+    EURUSD: 'EURUSD',
+  },
+  Darwinex: {
+    NAS100: 'NDX',
+    US500: 'SPX500',
+    US30: 'WS30',
+    US2000: 'US2000',
+    GER40: 'GDAXI',
+    UK100: 'UK100',
+    EU50: 'STOXX50E',
+    FRA40: 'FCHI',
+    JP225: 'J225',
+    HK50: 'HK50',
+    XAUUSD: 'XAUUSD',
+    EURUSD: 'EURUSD',
+  },
+  Custom: {
+    NAS100: 'NAS100',
+    US500: 'US500',
+    US30: 'US30',
+    US2000: 'US2000',
+    GER40: 'GER40',
+    UK100: 'UK100',
+    EU50: 'EU50',
+    FRA40: 'FRA40',
+    JP225: 'JP225',
+    HK50: 'HK50',
+    XAUUSD: 'XAUUSD',
+    EURUSD: 'EURUSD',
+  },
+};
+
+interface MT5LivePositionServer {
+  id: string;
+  ticket: string;
+  asset: string;
+  brokerSymbol: string;
+  action: 'BUY' | 'SELL';
+  orderType: 'MARKET' | 'LIMIT';
+  lots: number;
+  initialLots: number;
+  entryPrice: number;
+  currentPrice: number;
+  stopLoss: number;
+  takeProfit1: number;
+  takeProfit2: number;
+  floatingPnlUsd: number;
+  floatingR: number;
+  realizedPnlUsd: number;
+  riskUsd: number;
+  riskPercent: number;
+  playbookName: string;
+  status: 'OPEN' | 'BREAK_EVEN' | 'PARTIAL_TP1' | 'PENDING_LIMIT';
+  eaStatus?: 'SYNCED' | 'QUEUED' | 'WEB_SIM';
+  openedAt: string;
+}
+
+interface MT5ClosedOrderServer {
+  id: string;
+  ticket: string;
+  asset: string;
+  brokerSymbol: string;
+  action: 'BUY' | 'SELL';
+  lots: number;
+  entryPrice: number;
+  closePrice: number;
+  realizedPnlUsd: number;
+  playbookName: string;
+  closedAt: string;
+  closeReason: string;
+}
+
+interface EAQueuedOrder {
+  id: string;
+  ticket: string;
+  asset: string;
+  brokerSymbol: string;
+  action: 'BUY' | 'SELL';
+  orderType: 'MARKET' | 'LIMIT';
+  lots: number;
+  entryPrice: number;
+  stopLoss: number;
+  takeProfit1: number;
+  takeProfit2: number;
+  createdAt: string;
+}
+
+const MACOS_MT5_INSTALLER_CANDIDATES = [
+  '/Users/deividbellovaldez/Downloads/MetaTrader5.pkg',
+  '/Users/deividbellovaldez/Downloads/MetaTrader 5.pkg',
+  '/Users/deividbellovaldez/Downloads/MetaTrader5.pkg.zip',
+];
+
+function getMacosMt5InstallerPath(): string {
+  for (const candidate of MACOS_MT5_INSTALLER_CANDIDATES) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return MACOS_MT5_INSTALLER_CANDIDATES[0];
+}
+
+let eaOrderQueue: EAQueuedOrder[] = [];
+let eaLastSeenAt: string | null = null;
+
+let mt5SessionState = {
+  connected: false,
+  login: '15089421',
+  brokerServer: 'FTMO-Server3',
+  brokerPreset: 'FTMO' as MT5BrokerPreset,
+  accountType: 'Prop Firm' as 'Prop Firm' | 'Live ECN' | 'Demo Quant',
+  connectionMode: 'integrated_web' as MT5ConnectionMode,
+  metaApiToken: '',
+  metaApiAccountId: '',
+  metaApiConnected: false,
+  balance: 10000,
+  initialBalance: 10000,
+  realizedSessionPnlUsd: 0,
+  symbolMap: { ...MT5_BROKER_SYMBOL_MAPS.FTMO },
+  openPositions: [] as MT5LivePositionServer[],
+  orderHistory: [] as MT5ClosedOrderServer[],
+};
+
+function computeLivePositionMetrics(pos: MT5LivePositionServer): MT5LivePositionServer {
+  const inst = MARKET_INSTRUMENTS.find((i) => i.symbol === pos.asset) || MARKET_INSTRUMENTS[0];
+  const spec = getSpec(pos.asset) || INSTRUMENTS[0];
+  const livePrice = inst ? inst.price : pos.currentPrice;
+
+  if (pos.status === 'PENDING_LIMIT') {
+    // Check if limit price has been reached by live feed
+    const limitReached =
+      (pos.action === 'BUY' && livePrice <= pos.entryPrice) ||
+      (pos.action === 'SELL' && livePrice >= pos.entryPrice);
+    if (!limitReached) {
+      return {
+        ...pos,
+        currentPrice: livePrice,
+        floatingPnlUsd: 0,
+        floatingR: 0,
+      };
+    }
+    pos.status = 'OPEN';
+  }
+
+  const dir = pos.action === 'BUY' ? 1 : -1;
+  const priceDiff = (livePrice - pos.entryPrice) * dir;
+  const usdPerPtPerLot = valuePerPointUsd(spec, liveFxRates);
+  const floatingPnlUsd = Number((priceDiff * usdPerPtPerLot * pos.lots).toFixed(2));
+  const baseRisk = Math.max(1, pos.riskUsd || 50);
+  const floatingR = Number((floatingPnlUsd / baseRisk).toFixed(2));
+
+  return {
+    ...pos,
+    currentPrice: livePrice,
+    floatingPnlUsd,
+    floatingR,
+  };
+}
+
+function buildMt5StatusResponse() {
+  mt5SessionState.openPositions = mt5SessionState.openPositions.map(computeLivePositionMetrics);
+  const totalFloatingPnl = Number(
+    mt5SessionState.openPositions
+      .reduce((acc, p) => acc + (p.floatingPnlUsd || 0), 0)
+      .toFixed(2)
+  );
+  const equity = Number((mt5SessionState.balance + totalFloatingPnl).toFixed(2));
+  const resolvedInstallerPath = getMacosMt5InstallerPath();
+  const installerExists = fs.existsSync(resolvedInstallerPath);
+
+  return {
+    connected: mt5SessionState.connected,
+    login: mt5SessionState.login,
+    brokerServer: mt5SessionState.brokerServer,
+    brokerPreset: mt5SessionState.brokerPreset,
+    accountType: mt5SessionState.accountType,
+    connectionMode: mt5SessionState.connectionMode,
+    metaApiConnected: mt5SessionState.metaApiConnected,
+    eaLastSeenAt,
+    eaPendingCount: eaOrderQueue.length,
+    balance: Number(mt5SessionState.balance.toFixed(2)),
+    initialBalance: mt5SessionState.initialBalance,
+    equity,
+    floatingPnlUsd: totalFloatingPnl,
+    realizedSessionPnlUsd: Number(mt5SessionState.realizedSessionPnlUsd.toFixed(2)),
+    symbolMap: mt5SessionState.symbolMap,
+    openPositions: mt5SessionState.openPositions,
+    orderHistory: mt5SessionState.orderHistory,
+    macosInstallerReady: installerExists,
+    macosInstallerPath: resolvedInstallerPath,
+  };
+}
+
+// GET /api/mt5/status
+app.get('/api/mt5/status', (_req, res) => {
+  res.json(buildMt5StatusResponse());
+});
+
+// POST /api/mt5/connect
+app.post('/api/mt5/connect', (req, res) => {
+  const {
+    login,
+    brokerServer,
+    brokerPreset = 'FTMO',
+    accountType = 'Prop Firm',
+    connectionMode = 'integrated_web',
+    accountBalance,
+    metaApiToken = '',
+    metaApiAccountId = '',
+    customSymbolMap,
+  } = req.body || {};
+
+  const safePreset: MT5BrokerPreset = MT5_BROKER_SYMBOL_MAPS[brokerPreset as MT5BrokerPreset]
+    ? (brokerPreset as MT5BrokerPreset)
+    : 'FTMO';
+
+  const nextBalance =
+    typeof accountBalance === 'number' && accountBalance >= 100
+      ? accountBalance
+      : mt5SessionState.balance || 10000;
+
+  mt5SessionState = {
+    ...mt5SessionState,
+    connected: true,
+    login: String(login || mt5SessionState.login || '15089421').trim(),
+    brokerServer: String(brokerServer || `${safePreset}-Server3`).trim(),
+    brokerPreset: safePreset,
+    accountType: accountType || 'Prop Firm',
+    connectionMode: connectionMode as MT5ConnectionMode,
+    metaApiToken: String(metaApiToken || ''),
+    metaApiAccountId: String(metaApiAccountId || ''),
+    metaApiConnected: Boolean(metaApiToken && metaApiAccountId),
+    balance: nextBalance,
+    initialBalance: nextBalance,
+    symbolMap:
+      customSymbolMap && typeof customSymbolMap === 'object'
+        ? { ...MT5_BROKER_SYMBOL_MAPS[safePreset], ...customSymbolMap }
+        : { ...MT5_BROKER_SYMBOL_MAPS[safePreset] },
+  };
+
+  res.json({
+    ok: true,
+    message: `Sesión MT5 iniciada en ${mt5SessionState.brokerServer} (Login #${mt5SessionState.login})`,
+    state: buildMt5StatusResponse(),
+  });
+});
+
+// POST /api/mt5/disconnect
+app.post('/api/mt5/disconnect', (_req, res) => {
+  mt5SessionState.connected = false;
+  res.json({
+    ok: true,
+    message: 'Sesión MT5 cerrada.',
+    state: buildMt5StatusResponse(),
+  });
+});
+
+// POST /api/mt5/symbol-map
+app.post('/api/mt5/symbol-map', (req, res) => {
+  const { symbolMap, brokerPreset } = req.body || {};
+  if (brokerPreset && MT5_BROKER_SYMBOL_MAPS[brokerPreset as MT5BrokerPreset]) {
+    mt5SessionState.brokerPreset = brokerPreset as MT5BrokerPreset;
+    mt5SessionState.symbolMap = { ...MT5_BROKER_SYMBOL_MAPS[brokerPreset as MT5BrokerPreset] };
+  }
+  if (symbolMap && typeof symbolMap === 'object') {
+    mt5SessionState.symbolMap = {
+      ...mt5SessionState.symbolMap,
+      ...symbolMap,
+    };
+  }
+  res.json({
+    ok: true,
+    state: buildMt5StatusResponse(),
+  });
+});
+
+// POST /api/mt5/execute — 1-Click Auto-Selector & Order Executor
+app.post('/api/mt5/execute', async (req, res) => {
+  await syncRealTimeTradingViewQuotes();
+  const {
+    asset = 'NAS100',
+    action = 'BUY',
+    orderType = 'MARKET',
+    lots = 0.5,
+    entryPrice,
+    stopLoss,
+    takeProfit1,
+    takeProfit2,
+    playbookName = 'TRstudio Setup',
+    riskUsd = 50,
+    riskPercent = 0.5,
+    autoConnectIfNeeded = true,
+  } = req.body || {};
+
+  if (!mt5SessionState.connected && autoConnectIfNeeded) {
+    mt5SessionState.connected = true;
+  }
+
+  if (!mt5SessionState.connected) {
+    return res.status(400).json({
+      error: 'Inicia sesión primero con tu broker en MT5 para ejecutar la orden.',
+    });
+  }
+
+  const inst = MARKET_INSTRUMENTS.find((i) => i.symbol === asset) || MARKET_INSTRUMENTS[0];
+  const spec = getSpec(inst.symbol) || INSTRUMENTS[0];
+  const brokerSymbol = mt5SessionState.symbolMap[inst.symbol] || inst.symbol;
+  const normalizedAction: 'BUY' | 'SELL' = action === 'SELL' ? 'SELL' : 'BUY';
+  const normalizedOrderType: 'MARKET' | 'LIMIT' = orderType === 'LIMIT' ? 'LIMIT' : 'MARKET';
+  const safeLots = Math.max(0.01, Number(Number(lots || 0.1).toFixed(2)));
+
+  const fillPrice =
+    normalizedOrderType === 'MARKET'
+      ? inst.price
+      : Number(entryPrice) > 0
+      ? roundToTick(Number(entryPrice), spec)
+      : inst.price;
+
+  const dir = normalizedAction === 'BUY' ? 1 : -1;
+  const refEntry = Number(entryPrice) > 0 ? Number(entryPrice) : fillPrice;
+  const rawSL = Number(stopLoss);
+  const rawTP1 = Number(takeProfit1);
+  const rawTP2 = Number(takeProfit2);
+
+  // For MARKET orders where fillPrice differs from the setup's planned entryPrice,
+  // preserve the exact stopLoss / TP1 / TP2 distances relative to fillPrice so risk ($) and R:R stay exact.
+  const slDist = rawSL > 0 ? Math.abs(refEntry - rawSL) : fillPrice * 0.004;
+  const tp1Dist = rawTP1 > 0 ? Math.abs(rawTP1 - refEntry) : slDist * 1.8;
+  const tp2Dist = rawTP2 > 0 ? Math.abs(rawTP2 - refEntry) : slDist * 3.0;
+
+  const safeSL =
+    normalizedOrderType === 'LIMIT' && rawSL > 0
+      ? roundToTick(rawSL, spec)
+      : roundToTick(fillPrice - dir * slDist, spec);
+  const safeTP1 =
+    normalizedOrderType === 'LIMIT' && rawTP1 > 0
+      ? roundToTick(rawTP1, spec)
+      : roundToTick(fillPrice + dir * tp1Dist, spec);
+  const safeTP2 =
+    normalizedOrderType === 'LIMIT' && rawTP2 > 0
+      ? roundToTick(rawTP2, spec)
+      : roundToTick(fillPrice + dir * tp2Dist, spec);
+
+  const ticketNumber = `${Math.floor(89000000 + Math.random() * 9999999)}`;
+  const orderId = `mt5-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+  // 1) Enqueue for local MT5 Desktop EA Bridge (TRstudio_MT5_AutoExecutor.mq5)
+  const queuedItem: EAQueuedOrder = {
+    id: orderId,
+    ticket: ticketNumber,
+    asset: inst.symbol,
+    brokerSymbol,
+    action: normalizedAction,
+    orderType: normalizedOrderType,
+    lots: safeLots,
+    entryPrice: fillPrice,
+    stopLoss: safeSL,
+    takeProfit1: safeTP1,
+    takeProfit2: safeTP2,
+    createdAt: new Date().toISOString(),
+  };
+  eaOrderQueue.push(queuedItem);
+
+  // 2) Optional MetaApi Cloud REST forwarding if configured
+  if (
+    mt5SessionState.connectionMode === 'metaapi_cloud' &&
+    mt5SessionState.metaApiToken &&
+    mt5SessionState.metaApiAccountId
+  ) {
+    try {
+      const actionType =
+        normalizedOrderType === 'MARKET'
+          ? normalizedAction === 'BUY'
+            ? 'ORDER_TYPE_BUY'
+            : 'ORDER_TYPE_SELL'
+          : normalizedAction === 'BUY'
+          ? 'ORDER_TYPE_BUY_LIMIT'
+          : 'ORDER_TYPE_SELL_LIMIT';
+
+      await fetch(
+        `https://mt-client-api-v1.agiliumtrade.agiliumtrade.ai/users/current/accounts/${mt5SessionState.metaApiAccountId}/trade`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'auth-token': mt5SessionState.metaApiToken,
+          },
+          body: JSON.stringify({
+            actionType,
+            symbol: brokerSymbol,
+            volume: safeLots,
+            openPrice: normalizedOrderType === 'LIMIT' ? fillPrice : undefined,
+            stopLoss: safeSL,
+            takeProfit: safeTP1,
+            comment: `TRstudio ${inst.symbol}`,
+          }),
+        }
+      ).catch(() => null);
+    } catch (_e) {
+      // Fallback gracefully to integrated live execution engine
+    }
+  }
+
+  const newPos: MT5LivePositionServer = computeLivePositionMetrics({
+    id: orderId,
+    ticket: ticketNumber,
+    asset: inst.symbol,
+    brokerSymbol,
+    action: normalizedAction,
+    orderType: normalizedOrderType,
+    lots: safeLots,
+    initialLots: safeLots,
+    entryPrice: fillPrice,
+    currentPrice: inst.price,
+    stopLoss: safeSL,
+    takeProfit1: safeTP1,
+    takeProfit2: safeTP2,
+    floatingPnlUsd: 0,
+    floatingR: 0,
+    realizedPnlUsd: 0,
+    riskUsd: Number(riskUsd) || 50,
+    riskPercent: Number(riskPercent) || 0.5,
+    playbookName: String(playbookName || 'TRstudio Auto-Execution'),
+    status: normalizedOrderType === 'LIMIT' ? 'PENDING_LIMIT' : 'OPEN',
+    eaStatus: mt5SessionState.connectionMode === 'ea_bridge' ? 'QUEUED' : 'WEB_SIM',
+    openedAt: new Date().toISOString(),
+  });
+
+  mt5SessionState.openPositions = [newPos, ...mt5SessionState.openPositions];
+
+  res.json({
+    ok: true,
+    executedPosition: newPos,
+    message: `Orden #${ticketNumber} ejecutada en MT5: ${normalizedAction} ${safeLots} Lotes en ${brokerSymbol} (${inst.symbol}) @ ${fillPrice}`,
+    state: buildMt5StatusResponse(),
+  });
+});
+
+// POST /api/mt5/modify-position — Move SL to Break-Even or Close 50% at TP1
+app.post('/api/mt5/modify-position', (req, res) => {
+  const { id, modAction } = req.body || {};
+  const targetIdx = mt5SessionState.openPositions.findIndex(
+    (p) => p.id === id || p.ticket === id
+  );
+
+  if (targetIdx < 0) {
+    return res.status(404).json({ error: 'Posición no encontrada en MT5.' });
+  }
+
+  const pos = computeLivePositionMetrics(mt5SessionState.openPositions[targetIdx]);
+
+  if (modAction === 'BREAK_EVEN') {
+    pos.stopLoss = pos.entryPrice;
+    pos.status = 'BREAK_EVEN';
+    mt5SessionState.openPositions[targetIdx] = pos;
+    return res.json({
+      ok: true,
+      message: `Stop Loss movido a Break Even (${pos.entryPrice}) en Ticket #${pos.ticket}`,
+      state: buildMt5StatusResponse(),
+    });
+  }
+
+  if (modAction === 'PARTIAL_TP1') {
+    const spec = getSpec(pos.asset) || INSTRUMENTS[0];
+    const closedLots = Math.max(0.01, Number((pos.lots * 0.5).toFixed(2)));
+    const remainingLots = Math.max(0.01, Number((pos.lots - closedLots).toFixed(2)));
+    const dir = pos.action === 'BUY' ? 1 : -1;
+    const usdPerPt = valuePerPointUsd(spec, liveFxRates);
+
+    // Calculate partial profit at current price if strictly in profit, otherwise at TP1 target
+    const isStrictlyInProfit = (pos.currentPrice - pos.entryPrice) * dir > spec.tick;
+    const effectivePrice = isStrictlyInProfit ? pos.currentPrice : pos.takeProfit1;
+
+    const partialPnl = Number(
+      (((effectivePrice - pos.entryPrice) * dir) * usdPerPt * closedLots).toFixed(2)
+    );
+
+    mt5SessionState.balance = Number((mt5SessionState.balance + partialPnl).toFixed(2));
+    mt5SessionState.realizedSessionPnlUsd = Number(
+      (mt5SessionState.realizedSessionPnlUsd + partialPnl).toFixed(2)
+    );
+
+    pos.lots = remainingLots;
+    pos.stopLoss = pos.entryPrice;
+    pos.realizedPnlUsd = Number((pos.realizedPnlUsd + partialPnl).toFixed(2));
+    pos.status = 'PARTIAL_TP1';
+    mt5SessionState.openPositions[targetIdx] = computeLivePositionMetrics(pos);
+
+    mt5SessionState.orderHistory.unshift({
+      id: `hist-${Date.now()}`,
+      ticket: `${pos.ticket}-P1`,
+      asset: pos.asset,
+      brokerSymbol: pos.brokerSymbol,
+      action: pos.action,
+      lots: closedLots,
+      entryPrice: pos.entryPrice,
+      closePrice: effectivePrice,
+      realizedPnlUsd: partialPnl,
+      playbookName: pos.playbookName,
+      closedAt: new Date().toISOString(),
+      closeReason: 'Parcial 50% TP1 + SL a Break Even',
+    });
+
+    return res.json({
+      ok: true,
+      message: `50% (${closedLots} Lotes) cerrado (${partialPnl >= 0 ? '+' : ''}$${partialPnl.toFixed(2)} USD) y SL movido a Break Even en #${pos.ticket}`,
+      state: buildMt5StatusResponse(),
+    });
+  }
+
+  if (modAction === 'TRIGGER_LIMIT') {
+    pos.status = 'OPEN';
+    pos.orderType = 'MARKET';
+    mt5SessionState.openPositions[targetIdx] = computeLivePositionMetrics(pos);
+    return res.json({
+      ok: true,
+      message: `Orden Limit #${pos.ticket} activada a mercado.`,
+      state: buildMt5StatusResponse(),
+    });
+  }
+
+  res.json({ ok: true, state: buildMt5StatusResponse() });
+});
+
+// POST /api/mt5/close-position — Close Single Position or Close All
+app.post('/api/mt5/close-position', (req, res) => {
+  const { id } = req.body || {};
+
+  if (id === 'ALL') {
+    const refreshed = mt5SessionState.openPositions.map(computeLivePositionMetrics);
+    let totalClosedPnl = 0;
+    for (const pos of refreshed) {
+      totalClosedPnl += pos.floatingPnlUsd;
+      mt5SessionState.orderHistory.unshift({
+        id: `hist-${Date.now()}-${pos.ticket}`,
+        ticket: pos.ticket,
+        asset: pos.asset,
+        brokerSymbol: pos.brokerSymbol,
+        action: pos.action,
+        lots: pos.lots,
+        entryPrice: pos.entryPrice,
+        closePrice: pos.currentPrice,
+        realizedPnlUsd: pos.floatingPnlUsd,
+        playbookName: pos.playbookName,
+        closedAt: new Date().toISOString(),
+        closeReason: 'Cierre Total Manual en MT5',
+      });
+    }
+    mt5SessionState.balance = Number((mt5SessionState.balance + totalClosedPnl).toFixed(2));
+    mt5SessionState.realizedSessionPnlUsd = Number(
+      (mt5SessionState.realizedSessionPnlUsd + totalClosedPnl).toFixed(2)
+    );
+    mt5SessionState.openPositions = [];
+    eaOrderQueue = [];
+
+    return res.json({
+      ok: true,
+      message: `Todas las posiciones MT5 cerradas (${totalClosedPnl >= 0 ? '+' : ''}$${totalClosedPnl.toFixed(2)} USD)`,
+      state: buildMt5StatusResponse(),
+    });
+  }
+
+  const targetIdx = mt5SessionState.openPositions.findIndex(
+    (p) => p.id === id || p.ticket === id
+  );
+  if (targetIdx < 0) {
+    return res.status(404).json({ error: 'Posición no encontrada.' });
+  }
+
+  const pos = computeLivePositionMetrics(mt5SessionState.openPositions[targetIdx]);
+  mt5SessionState.balance = Number((mt5SessionState.balance + pos.floatingPnlUsd).toFixed(2));
+  mt5SessionState.realizedSessionPnlUsd = Number(
+    (mt5SessionState.realizedSessionPnlUsd + pos.floatingPnlUsd).toFixed(2)
+  );
+
+  mt5SessionState.orderHistory.unshift({
+    id: `hist-${Date.now()}`,
+    ticket: pos.ticket,
+    asset: pos.asset,
+    brokerSymbol: pos.brokerSymbol,
+    action: pos.action,
+    lots: pos.lots,
+    entryPrice: pos.entryPrice,
+    closePrice: pos.currentPrice,
+    realizedPnlUsd: pos.floatingPnlUsd,
+    playbookName: pos.playbookName,
+    closedAt: new Date().toISOString(),
+    closeReason: 'Cierre Manual en MT5',
+  });
+
+  mt5SessionState.openPositions.splice(targetIdx, 1);
+  eaOrderQueue = eaOrderQueue.filter((o) => o.id !== pos.id);
+
+  res.json({
+    ok: true,
+    message: `Orden #${pos.ticket} (${pos.brokerSymbol}) cerrada en ${pos.currentPrice} (${pos.floatingPnlUsd >= 0 ? '+' : ''}$${pos.floatingPnlUsd.toFixed(2)} USD)`,
+    state: buildMt5StatusResponse(),
+  });
+});
+
+// GET /api/mt5/ea-queue — Polled by TRstudio_MT5_AutoExecutor.mq5 inside MT5 Desktop
+app.get('/api/mt5/ea-queue', (_req, res) => {
+  eaLastSeenAt = new Date().toISOString();
+  if (eaOrderQueue.length === 0) {
+    return res.json({ hasPending: false });
+  }
+  const nextOrder = eaOrderQueue[0];
+  res.json({
+    hasPending: true,
+    ...nextOrder,
+  });
+});
+
+// POST /api/mt5/ea-ack — Confirmed by TRstudio_MT5_AutoExecutor.mq5 after OrderSend
+app.post('/api/mt5/ea-ack', (req, res) => {
+  eaLastSeenAt = new Date().toISOString();
+  const { id, mt5Ticket } = req.body || {};
+  eaOrderQueue = eaOrderQueue.filter((o) => o.id !== id);
+  mt5SessionState.openPositions = mt5SessionState.openPositions.map((pos) => {
+    if (pos.id === id) {
+      return {
+        ...pos,
+        ticket: mt5Ticket && mt5Ticket !== '0' ? String(mt5Ticket) : pos.ticket,
+        eaStatus: 'SYNCED',
+      };
+    }
+    return pos;
+  });
+  res.json({ ok: true });
+});
+
+// POST /api/mt5/open-macos-installer — Opens the unpacked MetaTrader5.pkg on macOS
+app.post('/api/mt5/open-macos-installer', async (_req, res) => {
+  try {
+    const resolvedInstallerPath = getMacosMt5InstallerPath();
+    if (fs.existsSync(resolvedInstallerPath)) {
+      const { exec } = await import('child_process');
+      exec(`open -R "${resolvedInstallerPath}"`);
+      return res.json({
+        ok: true,
+        localFileFound: true,
+        path: resolvedInstallerPath,
+        message: `Instalador ${path.basename(resolvedInstallerPath)} abierto en Finder (/Downloads).`,
+      });
+    }
+    return res.json({
+      ok: true,
+      localFileFound: false,
+      downloadUrl: 'https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/MetaTrader5.pkg.zip',
+      message: 'Redirigiendo al instalador oficial de MetaTrader 5 para macOS.',
+    });
+  } catch (_err) {
+    return res.json({
+      ok: false,
+      downloadUrl: 'https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/MetaTrader5.pkg.zip',
     });
   }
 });

@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
 import { Layers, Crosshair } from 'lucide-react';
-import { InstrumentQuote, AppLanguage } from '../types/trading';
+import { InstrumentQuote, AppLanguage, AppTheme } from '../types/trading';
+import { getSpec } from '../lib/instruments';
 
 interface MiniTradingChartProps {
   instrument: InstrumentQuote;
   language?: AppLanguage;
+  theme?: AppTheme;
 }
 
 export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
   instrument,
   language = 'es',
+  theme = 'cream',
 }) => {
   const isEn = language === 'en';
+  const isLight = theme === 'cream';
   const [showFVG, setShowFVG] = useState(true);
   const [showLiquidity, setShowLiquidity] = useState(true);
 
@@ -57,6 +61,8 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
     return chartHeight - ((val - minPrice) / priceRange) * (chartHeight - 30) - 15;
   };
 
+  const spec = getSpec(instrument.symbol);
+  const decimals = spec ? spec.decimals : instrument.price < 10 ? 5 : 2;
   const currentY = getY(instrument.price);
 
   return (
@@ -71,7 +77,8 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
             <div className="flex items-center gap-2 font-mono">
               <span className="text-base font-bold text-white">
                 {instrument.price.toLocaleString(undefined, {
-                  minimumFractionDigits: instrument.price < 10 ? 4 : 2,
+                  minimumFractionDigits: decimals,
+                  maximumFractionDigits: decimals,
                 })}
               </span>
               <span
@@ -125,7 +132,7 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
               y1={chartHeight * pct}
               x2={chartWidth}
               y2={chartHeight * pct}
-              stroke="#2d1c12"
+              stroke={isLight ? '#cfc8b8' : '#2d1c12'}
               strokeDasharray="3 3"
               strokeWidth="0.8"
             />
@@ -139,17 +146,18 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
                 y={getY(maxPrice - priceRange * 0.35)}
                 width={candleWidth * 7}
                 height={Math.max(16, priceRange * 0.12 * (chartHeight / priceRange))}
-                fill="rgba(245, 158, 11, 0.16)"
-                stroke="rgba(245, 158, 11, 0.55)"
+                fill={isLight ? 'rgba(180, 83, 9, 0.14)' : 'rgba(245, 158, 11, 0.16)'}
+                stroke={isLight ? 'rgba(180, 83, 9, 0.65)' : 'rgba(245, 158, 11, 0.55)'}
                 strokeDasharray="2 2"
                 strokeWidth="1"
               />
               <text
                 x={candleWidth * 14 + 6}
                 y={getY(maxPrice - priceRange * 0.35) + 12}
-                fill="#fbbf24"
+                fill={isLight ? '#78350f' : '#fbbf24'}
                 fontSize="9"
                 fontFamily="monospace"
+                fontWeight="bold"
               >
                 FVG 1H / 15M (CE 50%)
               </text>
@@ -164,14 +172,14 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
                 y1={chartHeight * 0.15}
                 x2={chartWidth}
                 y2={chartHeight * 0.15}
-                stroke="#10b981"
+                stroke={isLight ? '#047857' : '#10b981'}
                 strokeDasharray="4 4"
                 strokeWidth="1.2"
               />
               <text
-                x={chartWidth - 135}
+                x={chartWidth - 140}
                 y={chartHeight * 0.15 - 4}
-                fill="#34d399"
+                fill={isLight ? '#065f46' : '#34d399'}
                 fontSize="9"
                 fontFamily="monospace"
                 fontWeight="bold"
@@ -184,14 +192,14 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
                 y1={chartHeight * 0.88}
                 x2={chartWidth}
                 y2={chartHeight * 0.88}
-                stroke="#f43f5e"
+                stroke={isLight ? '#be123c' : '#f43f5e'}
                 strokeDasharray="4 4"
                 strokeWidth="1.2"
               />
               <text
-                x={chartWidth - 135}
+                x={chartWidth - 140}
                 y={chartHeight * 0.88 - 4}
-                fill="#fb7185"
+                fill={isLight ? '#9f1239' : '#fb7185'}
                 fontSize="9"
                 fontFamily="monospace"
                 fontWeight="bold"
@@ -233,26 +241,26 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
             y1={currentY}
             x2={chartWidth}
             y2={currentY}
-            stroke="#f59e0b"
+            stroke={isLight ? '#18181b' : '#f59e0b'}
             strokeWidth="1.2"
           />
           <rect
-            x={chartWidth - 78}
+            x={chartWidth - 84}
             y={currentY - 9}
-            width="78"
+            width="84"
             height="18"
-            fill="#d97706"
+            fill={isLight ? '#18181b' : '#d97706'}
             rx="3"
           />
           <text
-            x={chartWidth - 73}
+            x={chartWidth - 79}
             y={currentY + 3}
             fill="#ffffff"
             fontSize="9.5"
             fontFamily="monospace"
             fontWeight="bold"
           >
-            {instrument.price.toFixed(instrument.price < 10 ? 4 : 2)}
+            {instrument.price.toFixed(decimals)}
           </text>
         </svg>
 

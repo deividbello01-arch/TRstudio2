@@ -22,9 +22,15 @@ import {
   LineChart,
   X,
 } from 'lucide-react';
-import { TradeSetup, KillzoneSession, CustomDocument, AppLanguage, InstrumentMarketMode } from '../types/trading';
+import { TradeSetup, KillzoneSession, CustomDocument, AppLanguage, InstrumentMarketMode, MT5SessionState } from '../types/trading';
 import { getEnabledTradeableInstruments, FUTURES_CONTRACT_MAP } from '../lib/instruments';
-import { TRADING_STRATEGIES } from '../lib/strategiesData';
+import {
+  TRADING_STRATEGIES,
+  SCHEDULE_BLOCKS,
+  isStrategyActiveAtHourNY,
+  isHourInWindowNY,
+} from '../lib/strategiesData';
+import { MT5OneClickBar } from './MT5OneClickBar';
 
 interface TradeSetupEngineProps {
   initialAsset?: string;
@@ -39,11 +45,15 @@ interface TradeSetupEngineProps {
   language?: AppLanguage;
   marketMode?: InstrumentMarketMode;
   enabledSymbols?: string[];
+  mt5State?: MT5SessionState | null;
+  onRefreshMt5?: () => Promise<void>;
+  onOpenMt5Hub?: () => void;
 }
 
 export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
   initialAsset = 'NAS100',
   initialStrategyId = 'AUTO',
+  session,
   documents,
   onAddCustomDoc,
   onOpenKnowledgeTab,
@@ -53,8 +63,21 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
   language = 'es',
   marketMode = 'all_programmed',
   enabledSymbols,
+  mt5State = null,
+  onRefreshMt5 = async () => {},
+  onOpenMt5Hub,
 }) => {
   const isEn = language === 'en';
+  const currentDecimalHourNY = React.useMemo(() => {
+    const ny24 = new Date().toLocaleString('en-US', {
+      timeZone: 'America/New_York',
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const [h, m] = ny24.split(':');
+    return (parseInt(h, 10) % 24) + parseInt(m, 10) / 60;
+  }, [session?.nyTime]);
   const visibleInstruments = getEnabledTradeableInstruments(enabledSymbols, marketMode);
   const [selectedAsset, setSelectedAsset] = useState<string>(initialAsset);
   const [accountBalance, setAccountBalance] = useState<number>(defaultBalance);
@@ -274,7 +297,26 @@ TP 1: ${tradeSetup.prices.takeProfit1}
 TP 2: ${tradeSetup.prices.takeProfit2}
 R:R: ${tradeSetup.prices.riskRewardRatio}
 
-${isEn ? 'RECOMMENDED LOTS' : 'LOTES RECOMENDADOS'}: ${tradeSetup.propFirmRiskCalculation.recommendedLots} Lots (${tradeSetup.propFirmRiskCalculation.riskPercentage}% = $${tradeSetup.propFirmRiskCalculation.monetaryRiskUsd} USD)
+${
+  marketMode === 'futures_only'
+    ? isEn
+      ? 'RECOMMENDED CONTRACTS'
+      : 'CONTRATOS RECOMENDADOS'
+    : isEn
+    ? 'RECOMMENDED LOTS'
+    : 'LOTES RECOMENDADOS'
+}: ${tradeSetup.propFirmRiskCalculation.recommendedLots} ${
+      marketMode === 'futures_only'
+        ? isEn
+          ? 'Contracts'
+          : 'Contratos'
+        : isEn
+        ? 'Lots'
+        : 'Lotes'
+    } (${tradeSetup.propFirmRiskCalculation.riskPercentage}% = -$${(
+      tradeSetup.propFirmRiskCalculation.actualRiskAtStopUsd ??
+      tradeSetup.propFirmRiskCalculation.monetaryRiskUsd
+    ).toFixed(2)} USD)
 ${isEn ? 'Rationale' : 'Explicación'}: ${tradeSetup.thesisRationale}
 ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
     `.trim();
@@ -696,10 +738,22 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
         {/* Strategy Selector & Optional Notes */}
         <div className="pt-3 border-t border-[#3b271a] grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-[11px] font-mono font-semibold text-amber-200/80 mb-1 flex items-center gap-1.5">
-              <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-              <span>
-                {isEn ? '5. Institutional Playbook / Strategy:' : '5. Estrategia Operativa a Aplicar:'}
+            <label className="block text-[11px] font-mono font-semibold text-amber-200/80 mb-1 flex items-center justify-between gap-1.5">
+              <span className="flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                <span>
+                  {isEn
+                    ? `5. Institutional Playbook / Strategy (${TRADING_STRATEGIES.length}):`
+                    : `5. Estrategia Operativa a Aplicar (${TRADING_STRATEGIES.length}):`}
+                </span>
+              </span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/90 text-emerald-300 border border-emerald-700/60">
+                {
+                  TRADING_STRATEGIES.filter((s) =>
+                    isStrategyActiveAtHourNY(s, currentDecimalHourNY)
+                  ).length
+                }{' '}
+                {isEn ? 'ACTIVE NOW' : 'ACTIVAS AHORA'}
               </span>
             </label>
             <select
@@ -709,15 +763,82 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
             >
               <option value="AUTO">
                 {isEn
-                  ? 'Automatic (Best Strategy for Active Session & Asset)'
-                  : 'Automática (Mejor Estrategia según Horario y Activo)'}
+                  ? '⚡ Automatic (Best Strategy for Active NY Schedule & Asset)'
+                  : '⚡ Automática (Mejor Estrategia según Bloque Horario NY y Activo)'}
               </option>
-              {TRADING_STRATEGIES.map((st) => (
-                <option key={st.id} value={st.id}>
-                  {st.code} — {isEn ? st.nameEn : st.nameEs} ({st.winRateEstimate})
-                </option>
-              ))}
+              {SCHEDULE_BLOCKS.map((block) => {
+                const blockActive = isHourInWindowNY(
+                  block.startHourNY,
+                  block.endHourNY,
+                  currentDecimalHourNY
+                );
+                const blockStrats = TRADING_STRATEGIES.filter(
+                  (s) => s.scheduleBlock === block.id
+                );
+                if (blockStrats.length === 0) return null;
+                return (
+                  <optgroup
+                    key={block.id}
+                    label={`${blockActive ? (isEn ? '🟢 [ACTIVE NOW] ' : '🟢 [ACTIVA AHORA] ') : ''}${
+                      isEn ? block.labelEn : block.labelEs
+                    }`}
+                  >
+                    {blockStrats.map((st) => {
+                      const isActiveNow = isStrategyActiveAtHourNY(st, currentDecimalHourNY);
+                      const schedLabel = isEn
+                        ? st.scheduleLabelEn || block.timeRangeNY
+                        : st.scheduleLabelEs || block.timeRangeNY;
+                      return (
+                        <option key={st.id} value={st.id}>
+                          {isActiveNow ? (isEn ? '[ACTIVE NOW] ' : '[ACTIVA AHORA] ') : ''}
+                          {st.code} — {isEn ? st.nameEn : st.nameEs} • [{schedLabel}] ({st.winRateEstimate})
+                        </option>
+                      );
+                    })}
+                  </optgroup>
+                );
+              })}
             </select>
+            {(() => {
+              const activeStratObj =
+                selectedStrategyId === 'AUTO'
+                  ? TRADING_STRATEGIES.find(
+                      (s) =>
+                        isStrategyActiveAtHourNY(s, currentDecimalHourNY) &&
+                        s.bestAssets.includes(selectedAsset)
+                    ) ||
+                    TRADING_STRATEGIES.find((s) =>
+                      isStrategyActiveAtHourNY(s, currentDecimalHourNY)
+                    )
+                  : TRADING_STRATEGIES.find((s) => s.id === selectedStrategyId);
+              if (!activeStratObj) return null;
+              const isNow = isStrategyActiveAtHourNY(activeStratObj, currentDecimalHourNY);
+              return (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+                  <span
+                    className={`px-1.5 py-0.5 rounded font-bold border ${
+                      isNow
+                        ? 'bg-emerald-950 text-emerald-300 border-emerald-600/60'
+                        : 'bg-[#120c08] text-amber-300 border-[#3b271a]'
+                    }`}
+                  >
+                    {isNow
+                      ? isEn
+                        ? '🟢 [ACTIVE NOW]'
+                        : '🟢 [ACTIVA AHORA]'
+                      : isEn
+                      ? '🕒 Scheduled'
+                      : '🕒 Horario NY'}
+                  </span>
+                  <span className="text-amber-200/80">
+                    {activeStratObj.code}:{' '}
+                    {isEn
+                      ? activeStratObj.scheduleLabelEn || activeStratObj.bestSessionEn
+                      : activeStratObj.scheduleLabelEs || activeStratObj.bestSessionEs}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
 
           <div>
@@ -959,6 +1080,15 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
               </div>
             )}
           </div>
+
+          {/* 1-Click MetaTrader 5 Auto-Execution Bar */}
+          <MT5OneClickBar
+            setup={tradeSetup}
+            mt5State={mt5State}
+            onRefreshMt5={onRefreshMt5}
+            onOpenMt5Hub={onOpenMt5Hub}
+            language={language}
+          />
 
           {/* Coordinates */}
           <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#120c08] border-b border-[#3b271a]">

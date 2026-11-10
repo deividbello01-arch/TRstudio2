@@ -60,7 +60,7 @@ export const CandleCountdownTimer: React.FC<CandleCountdownTimerProps> = ({
   const get4HRemaining = () => {
     const utcHours = now.getUTCHours();
     const hoursInto4H = utcHours % 4;
-    const totalSecsInto4H = hoursInto4H * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    const totalSecsInto4H = hoursInto4H * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
     const remainingSeconds = 14400 - totalSecsInto4H;
     const hrs = Math.floor(remainingSeconds / 3600);
     const mins = Math.floor((remainingSeconds % 3600) / 60);
@@ -74,12 +74,30 @@ export const CandleCountdownTimer: React.FC<CandleCountdownTimerProps> = ({
     };
   };
 
+  // 1D remaining (aligned to 00:00 UTC daily close)
+  const get1DRemaining = () => {
+    const totalSecsIntoDay =
+      now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
+    const remainingSeconds = 86400 - totalSecsIntoDay;
+    const hrs = Math.floor(remainingSeconds / 3600);
+    const mins = Math.floor((remainingSeconds % 3600) / 60);
+    const secs = remainingSeconds % 60;
+    const progressPct = (totalSecsIntoDay / 86400) * 100;
+    return {
+      formatted: `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`,
+      totalRemainingSecs: remainingSeconds,
+      progressPct,
+      isClosingSoon: remainingSeconds <= 300,
+    };
+  };
+
   const m1 = getRemainingTime(1);
   const m5 = getRemainingTime(5);
   const m15 = getRemainingTime(15);
   const m30 = getRemainingTime(30);
   const h1 = getHourRemaining();
   const h4 = get4HRemaining();
+  const d1 = get1DRemaining();
 
   const prefix = isEn ? 'Candle' : 'Vela';
 
@@ -106,7 +124,7 @@ export const CandleCountdownTimer: React.FC<CandleCountdownTimerProps> = ({
     activeCountdown = h4;
     activeLabel = `${prefix} 4H`;
   } else {
-    activeCountdown = h1;
+    activeCountdown = d1;
     activeLabel = `${prefix} 1D`;
   }
 

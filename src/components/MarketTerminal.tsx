@@ -9,7 +9,7 @@ import {
   Radar,
 } from 'lucide-react';
 import { InstrumentQuote, KillzoneSession, AppSettings, ALL_PROGRAMMED_TRADEABLE_SYMBOLS } from '../types/trading';
-import { FUTURES_CONTRACT_MAP } from '../lib/instruments';
+import { FUTURES_CONTRACT_MAP, getSpec } from '../lib/instruments';
 import { MiniTradingChart } from './MiniTradingChart';
 import { TradingViewChart } from './TradingViewChart';
 
@@ -432,7 +432,8 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                   const isPositive = inst.change24h.startsWith('+');
                   const tickUp = inst.lastTickDirection === 'up';
                   const tickDown = inst.lastTickDirection === 'down';
-                  const decimals = inst.price < 10 ? 4 : inst.price > 15000 ? 1 : 2;
+                  const spec = getSpec(inst.symbol);
+                  const decimals = spec ? spec.decimals : inst.price < 10 ? 5 : inst.price > 15000 ? 1 : 2;
                   const futInfo = FUTURES_CONTRACT_MAP[inst.symbol];
                   const displayName =
                     marketMode === 'futures_only' && futInfo
@@ -664,7 +665,11 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
             />
           ) : (
             selectedInstrument && (
-              <MiniTradingChart instrument={selectedInstrument} language={settings.language} />
+              <MiniTradingChart
+                instrument={selectedInstrument}
+                language={settings.language}
+                theme={settings.theme}
+              />
             )
           )}
         </div>

@@ -24,8 +24,10 @@ import {
   AppLanguage,
   InstrumentMarketMode,
   ALL_PROGRAMMED_TRADEABLE_SYMBOLS,
+  MT5SessionState,
 } from '../types/trading';
 import { FUTURES_CONTRACT_MAP } from '../lib/instruments';
+import { MT5OneClickBar } from './MT5OneClickBar';
 
 interface MultiIndexScannerProps {
   defaultBalance?: number;
@@ -35,6 +37,9 @@ interface MultiIndexScannerProps {
   enabledSymbols?: string[];
   onSelectAssetInChart?: (symbol: string) => void;
   onOpenInSetupEngine?: (symbol: string) => void;
+  mt5State?: MT5SessionState | null;
+  onRefreshMt5?: () => Promise<void>;
+  onOpenMt5Hub?: () => void;
 }
 
 export const MultiIndexScanner: React.FC<MultiIndexScannerProps> = ({
@@ -45,6 +50,9 @@ export const MultiIndexScanner: React.FC<MultiIndexScannerProps> = ({
   enabledSymbols,
   onSelectAssetInChart,
   onOpenInSetupEngine,
+  mt5State = null,
+  onRefreshMt5 = async () => {},
+  onOpenMt5Hub,
 }) => {
   const isEn = language === 'en';
   const [accountBalance, setAccountBalance] = useState<number>(defaultBalance);
@@ -80,6 +88,7 @@ export const MultiIndexScanner: React.FC<MultiIndexScannerProps> = ({
           filterCategory: activeCat,
           includeNews,
           marketMode,
+          enabledSymbols,
           language,
         }),
       });
@@ -102,7 +111,17 @@ export const MultiIndexScanner: React.FC<MultiIndexScannerProps> = ({
 
   useEffect(() => {
     runScanner();
-  }, [language, includeNews, marketMode]);
+  }, [language, includeNews, marketMode, enabledSymbols]);
+
+  const isFuturesMode = marketMode === 'futures_only';
+  const unitWord = isFuturesMode
+    ? isEn
+      ? 'Contracts'
+      : 'Contratos'
+    : isEn
+    ? 'Lots'
+    : 'Lotes';
+  const unitShort = isFuturesMode ? 'C' : 'L';
 
   const handleCopySetup = (setup: TradeSetup) => {
     const text = `
@@ -116,7 +135,7 @@ STOP LOSS: ${setup.prices.stopLoss} (${setup.prices.stopLossDistance})
 TP 1 (1:1.8): ${setup.prices.takeProfit1} (+$${setup.propFirmRiskCalculation.projectedProfitTp1Usd} USD)
 TP 2 (1:3.0): ${setup.prices.takeProfit2} (+$${setup.propFirmRiskCalculation.projectedProfitTp2Usd} USD)
 
-${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lots | ${isEn ? 'Exact SL Loss' : 'Pérdida Exacta en SL'}: -$${setup.propFirmRiskCalculation.actualRiskAtStopUsd} USD (${setup.propFirmRiskCalculation.riskPercentage}%)
+${isFuturesMode ? (isEn ? 'CONTRACTS' : 'CONTRATOS') : isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} ${unitWord} | ${isEn ? 'Exact SL Loss' : 'Pérdida Exacta en SL'}: -$${setup.propFirmRiskCalculation.actualRiskAtStopUsd} USD (${setup.propFirmRiskCalculation.riskPercentage}%)
     `.trim();
 
     navigator.clipboard.writeText(text);
@@ -326,7 +345,7 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
                 {scanData?.session || 'NY / London'}
               </div>
               <div className="text-[10px] text-amber-400">
-                {scanData?.nyTime || '--:--'} • {scanData?.scannedCount || 0}{' '}
+                {scanData?.nyTime || '--:--'} • {filteredRankedSetups.length || scanData?.scannedCount || 0}{' '}
                 {isEn ? 'assets ranked' : 'activos evaluados'}
               </div>
             </div>
@@ -511,10 +530,16 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
 
               <div className="p-3 rounded-xl bg-[#120c08] border border-amber-700/50">
                 <span className="text-[10px] text-amber-300 uppercase block">
-                  {isEn ? 'Exact Lot Size' : 'Lotaje Exacto'}
+                  {isFuturesMode
+                    ? isEn
+                      ? 'Exact Contracts'
+                      : 'Contratos Exactos'
+                    : isEn
+                    ? 'Exact Lot Size'
+                    : 'Lotaje Exacto'}
                 </span>
                 <span className="text-base font-black text-amber-400 mt-0.5 block">
-                  {best.propFirmRiskCalculation.recommendedLots} {isEn ? 'Lots' : 'Lotes'}
+                  {best.propFirmRiskCalculation.recommendedLots} {unitWord}
                 </span>
                 <span className="text-[10px] text-amber-200/60 truncate block">
                   {best.propFirmRiskCalculation.contractSizeSpec}
@@ -541,6 +566,15 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
               {best.thesisRationale}
             </div>
           </div>
+
+          {/* 1-Click MetaTrader 5 Auto-Execution Bar for #1 Setup */}
+          <MT5OneClickBar
+            setup={best}
+            mt5State={mt5State}
+            onRefreshMt5={onRefreshMt5}
+            onOpenMt5Hub={onOpenMt5Hub}
+            language={language}
+          />
         </div>
       )}
 
@@ -642,10 +676,10 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
                       </div>
                       <div>
                         <span className="text-[10px] text-amber-300/80 block">
-                          {isEn ? 'Lots' : 'Lotes'} ({item.propFirmRiskCalculation.riskPercentage}%)
+                          {unitWord} ({item.propFirmRiskCalculation.riskPercentage}%)
                         </span>
                         <span className="font-bold text-amber-300">
-                          {item.propFirmRiskCalculation.recommendedLots} L (-$
+                          {item.propFirmRiskCalculation.recommendedLots} {unitShort} (-$
                           {item.propFirmRiskCalculation.actualRiskAtStopUsd.toFixed(0)})
                         </span>
                       </div>
@@ -665,6 +699,14 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <MT5OneClickBar
+                        setup={item}
+                        mt5State={mt5State}
+                        onRefreshMt5={onRefreshMt5}
+                        onOpenMt5Hub={onOpenMt5Hub}
+                        language={language}
+                        compact={true}
+                      />
                       <span
                         className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border hidden md:inline-block ${colors.badge}`}
                       >
@@ -694,7 +736,15 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
                         <span className="font-mono text-amber-300 font-bold">
                           {item.playbookName}
                         </span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <MT5OneClickBar
+                            setup={item}
+                            mt5State={mt5State}
+                            onRefreshMt5={onRefreshMt5}
+                            onOpenMt5Hub={onOpenMt5Hub}
+                            language={language}
+                            compact={true}
+                          />
                           {onSelectAssetInChart && (
                             <button
                               type="button"
@@ -737,10 +787,10 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px]">
                         <div className="p-2.5 rounded-lg bg-[#18110b] border border-[#3b271a]">
                           <span className="text-amber-200/60 block">
-                            {isEn ? 'Contract & Lot Math:' : 'Cálculo Exacto de Contrato:'}
+                            {isEn ? 'Contract & Size Math:' : 'Cálculo Exacto de Contrato:'}
                           </span>
                           <strong className="text-white">
-                            {item.propFirmRiskCalculation.recommendedLots} Lotes
+                            {item.propFirmRiskCalculation.recommendedLots} {unitWord}
                           </strong>{' '}
                           • {item.propFirmRiskCalculation.contractSizeSpec}
                         </div>

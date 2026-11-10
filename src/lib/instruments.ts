@@ -512,6 +512,7 @@ export const FX_RATE_TICKERS: Record<string, { tv: string; fallback: number }> =
   EURUSD: { tv: 'FX:EURUSD', fallback: 1.1228 },
   GBPUSD: { tv: 'FX:GBPUSD', fallback: 1.3448 },
   USDJPY: { tv: 'FX:USDJPY', fallback: 157.95 },
+  USDHKD: { tv: 'FX:USDHKD', fallback: 7.8 },
 };
 
 export type FxRates = { EURUSD: number; GBPUSD: number; USDJPY: number; USDHKD: number };

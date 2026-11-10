@@ -63,48 +63,93 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const themes: Array<{ id: AppTheme; nameEs: string; nameEn: string; previewClass: string }> = [
+  const themes: Array<{
+    id: AppTheme;
+    nameEs: string;
+    nameEn: string;
+    descEs: string;
+    descEn: string;
+    bgHex: string;
+    cardHex: string;
+    textHex: string;
+    accentHex: string;
+  }> = [
     {
       id: 'cream',
-      nameEs: 'Blanco, Gris, Crema & Letras Negras (Principal)',
-      nameEn: 'White, Gray, Cream & Black Letters (Default)',
-      previewClass: 'bg-[#f5f2ea] border-[#18181b]',
-    },
-    {
-      id: 'coffee',
-      nameEs: 'Naranja / Café Espresso',
-      nameEn: 'Orange / Coffee Espresso',
-      previewClass: 'bg-[#f59e0b] border-amber-300',
-    },
-    {
-      id: 'mint',
-      nameEs: 'Verde Salvia (#DAF1DE)',
-      nameEn: 'Mint Sage (#DAF1DE)',
-      previewClass: 'bg-[#DAF1DE] border-emerald-200',
-    },
-    {
-      id: 'crimson',
-      nameEs: 'Rojo Claro & Negro Marmoleado',
-      nameEn: 'Light Red & Black Marble',
-      previewClass: 'bg-[#ff6b6b] border-rose-300',
-    },
-    {
-      id: 'midnight',
-      nameEs: 'Azul Institucional',
-      nameEn: 'Institutional Midnight',
-      previewClass: 'bg-sky-500 border-sky-300',
-    },
-    {
-      id: 'emerald',
-      nameEs: 'Esmeralda Quant',
-      nameEn: 'Emerald Quant',
-      previewClass: 'bg-emerald-500 border-emerald-300',
+      nameEs: 'Claro Marfil & Letras Negras (Día)',
+      nameEn: 'Ivory Light & Black Text (Day)',
+      descEs: 'Fondo marfil/blanco con letras negro pizarra de máximo contraste.',
+      descEn: 'Warm ivory/white surface with ultra-crisp slate black letters.',
+      bgHex: '#f4f1ea',
+      cardHex: '#ffffff',
+      textHex: '#0f172a',
+      accentHex: '#1e293b',
     },
     {
       id: 'obsidian',
-      nameEs: 'Negro Obsidiana Minimal',
-      nameEn: 'Obsidian Minimal',
-      previewClass: 'bg-zinc-300 border-white',
+      nameEs: 'Obsidiana Pro & Letras Blancas (TradingView)',
+      nameEn: 'Obsidian Pro & Crisp White (TradingView)',
+      descEs: 'Carbón institucional con texto blanco puro y acentos azul cielo.',
+      descEn: 'Institutional carbon dark with pure white text and sky blue accents.',
+      bgHex: '#090b10',
+      cardHex: '#161b26',
+      textHex: '#ffffff',
+      accentHex: '#60a5fa',
+    },
+    {
+      id: 'midnight',
+      nameEs: 'Azul Wall Street & Letras Plata/Blancas',
+      nameEn: 'Wall St Midnight & White/Silver Text',
+      descEs: 'Azul marino profundo con letras blancas y cian institucional.',
+      descEn: 'Deep navy terminal with crisp white and institutional cyan text.',
+      bgHex: '#060b16',
+      cardHex: '#121f38',
+      textHex: '#ffffff',
+      accentHex: '#38bdf8',
+    },
+    {
+      id: 'coffee',
+      nameEs: 'Café Espresso & Letras Ámbar/Blancas',
+      nameEn: 'Espresso Dark & White/Gold Text',
+      descEs: 'Oscuro cálido con letras blancas y acentos dorado institucional.',
+      descEn: 'Warm dark espresso with crisp white letters and gold accents.',
+      bgHex: '#0c0906',
+      cardHex: '#1c140d',
+      textHex: '#ffffff',
+      accentHex: '#fbbf24',
+    },
+    {
+      id: 'emerald',
+      nameEs: 'Esmeralda Quant & Letras Blanco/Menta',
+      nameEn: 'Emerald Quant & White/Mint Text',
+      descEs: 'Verde bosque oscuro con letras blancas y menta de alta lectura.',
+      descEn: 'Deep forest green with crisp white and bright mint typography.',
+      bgHex: '#040d0a',
+      cardHex: '#0e261d',
+      textHex: '#ffffff',
+      accentHex: '#34d399',
+    },
+    {
+      id: 'mint',
+      nameEs: 'Pizarra & Verde Salvia (#DAF1DE)',
+      nameEn: 'Dark Slate & Mint Sage (#DAF1DE)',
+      descEs: 'Gris pizarra oscuro con letras blancas y subtítulos verde salvia #DAF1DE.',
+      descEn: 'Dark slate background with white headings and #DAF1DE sage text.',
+      bgHex: '#09100d',
+      cardHex: '#15261e',
+      textHex: '#ffffff',
+      accentHex: '#daf1de',
+    },
+    {
+      id: 'crimson',
+      nameEs: 'Ónix & Rojo Rubí (Letras Blancas)',
+      nameEn: 'Onyx & Ruby Crimson (White Text)',
+      descEs: 'Negro ónix con letras blancas nítidas y acentos rojo rubí.',
+      descEn: 'Onyx dark surface with pure white text and ruby crimson highlights.',
+      bgHex: '#0b0608',
+      cardHex: '#1e1016',
+      textHex: '#ffffff',
+      accentHex: '#fb7185',
     },
   ];
 
@@ -431,9 +476,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="pt-2 border-t border-[#3b271a] space-y-2.5">
             <h3 className="text-xs font-bold uppercase font-mono text-amber-300 flex items-center gap-1.5">
               <Palette className="w-4 h-4 text-amber-400" />
-              <span>{isEn ? 'App Theme & Color' : 'Color y Tema de la App'}</span>
+              <span>
+                {isEn
+                  ? 'High-Contrast Color Combinations (Fondo + Letras Legibles)'
+                  : 'Combinaciones de Color de Alto Contraste (Fondo + Letras Nítidas)'}
+              </span>
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {themes.map((t) => {
                 const active = settings.theme === t.id;
                 return (
@@ -441,14 +490,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     key={t.id}
                     type="button"
                     onClick={() => onUpdateSettings({ theme: t.id })}
-                    className={`p-3 rounded-xl border text-left transition flex items-center gap-2.5 font-mono ${
+                    className={`p-3 rounded-xl border text-left transition flex items-center gap-3 font-mono ${
                       active
-                        ? 'bg-[#2b1c13] border-amber-400 text-white font-bold ring-1 ring-amber-400/40'
-                        : 'bg-[#120c08] border-[#3b271a] text-amber-200/70 hover:border-amber-700'
+                        ? 'bg-[#2b1c13] border-amber-400 text-white font-bold ring-2 ring-amber-400/50 shadow-md'
+                        : 'bg-[#120c08] border-[#3b271a] text-amber-200 hover:border-amber-500'
                     }`}
                   >
-                    <span className={`w-3.5 h-3.5 rounded-full border shrink-0 ${t.previewClass}`} />
-                    <span className="truncate">{isEn ? t.nameEn : t.nameEs}</span>
+                    {/* Live Mini Preview Badge showing actual Background + Text + Accent */}
+                    <div
+                      className="w-11 h-10 rounded-lg border flex flex-col items-center justify-center shrink-0 shadow-inner"
+                      style={{
+                        backgroundColor: t.cardHex,
+                        borderColor: t.accentHex,
+                      }}
+                    >
+                      <span
+                        className="text-xs font-black leading-none"
+                        style={{ color: t.textHex }}
+                      >
+                        Aa
+                      </span>
+                      <span
+                        className="text-[9px] font-bold leading-none mt-0.5"
+                        style={{ color: t.accentHex }}
+                      >
+                        100%
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-white truncate">
+                        {isEn ? t.nameEn : t.nameEs}
+                      </div>
+                      <div className="text-[10px] text-amber-200 leading-snug line-clamp-2 mt-0.5 font-normal">
+                        {isEn ? t.descEn : t.descEs}
+                      </div>
+                    </div>
                   </button>
                 );
               })}
@@ -664,10 +740,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 desc={
                   isEn
                     ? 'Detailed step-by-step strategies & 19 web sources'
-                    : 'Academia de estrategias explicadas y directorio de 19 webs'
+                    : 'Academia de 18 estrategias explicadas y directorio de 19 webs'
                 }
                 checked={settings.showStrategiesTab ?? true}
                 onChange={() => onUpdateSettings({ showStrategiesTab: !(settings.showStrategiesTab ?? true) })}
+              />
+              <ToggleRow
+                label={isEn ? 'MT5 Auto-Execution Hub Tab' : 'Pestaña Ejecución MT5 en Vivo'}
+                desc={
+                  isEn
+                    ? 'Show MetaTrader 5 session login & live order manager'
+                    : 'Mostrar panel de conexión a MetaTrader 5 y gestión de órdenes'
+                }
+                checked={settings.showMt5Tab ?? true}
+                onChange={() => onUpdateSettings({ showMt5Tab: !(settings.showMt5Tab ?? true) })}
               />
               <ToggleRow
                 label={isEn ? 'Gemini News Chat Tab' : 'Pestaña Chat de Noticias (Gemini)'}

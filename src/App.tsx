@@ -9,15 +9,17 @@ import { SettingsModal } from './components/SettingsModal';
 import { NewsGeminiChat } from './components/NewsGeminiChat';
 import { MultiIndexScanner } from './components/MultiIndexScanner';
 import { StrategiesPlaybook } from './components/StrategiesPlaybook';
+import { MT5ExecutionHub } from './components/MT5ExecutionHub';
 import {
   InstrumentQuote,
   KillzoneSession,
   CustomDocument,
   AppSettings,
   DEFAULT_APP_SETTINGS,
+  MT5SessionState,
 } from './types/trading';
 import { DEFAULT_KNOWLEDGE_DOCUMENTS, StrategyPlaybook } from './lib/strategiesData';
-import { getSpec, FxRates, DEFAULT_FX_RATES } from './lib/instruments';
+import { getSpec, roundToTick, FxRates, DEFAULT_FX_RATES } from './lib/instruments';
 import { Activity } from 'lucide-react';
 
 export default function App() {
@@ -28,6 +30,7 @@ export default function App() {
   const [session, setSession] = useState<KillzoneSession | null>(null);
   const [fxRates, setFxRates] = useState<FxRates>(DEFAULT_FX_RATES);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [mt5State, setMt5State] = useState<MT5SessionState | null>(null);
 
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
@@ -51,6 +54,7 @@ export default function App() {
   });
 
   useEffect(() => {
+    document.documentElement.setAttribute('data-theme', settings.theme);
     try {
       localStorage.setItem('trstudio_settings_v4', JSON.stringify(settings));
     } catch (e) {
@@ -129,8 +133,12 @@ export default function App() {
 
     fetchWebSourcesDoc();
     refreshFeed();
+    refreshMt5Status();
 
-    const syncInterval = setInterval(refreshFeed, 2500);
+    const syncInterval = setInterval(() => {
+      refreshFeed();
+      refreshMt5Status();
+    }, 2500);
     return () => clearInterval(syncInterval);
   }, []);
 
@@ -141,19 +149,20 @@ export default function App() {
       setInstruments((prev) =>
         prev.map((inst) => {
           const spec = getSpec(inst.symbol);
-          const decimals = spec ? spec.decimals : inst.symbol === 'EURUSD' ? 4 : 2;
+          const decimals = spec ? spec.decimals : inst.symbol === 'EURUSD' ? 5 : 2;
           const step =
             inst.symbol === 'EURUSD'
-              ? (Math.random() - 0.495) * 0.00012
+              ? (Math.random() - 0.5) * 0.00012
               : inst.symbol === 'XAUUSD'
-              ? (Math.random() - 0.49) * 0.25
+              ? (Math.random() - 0.5) * 0.25
               : inst.symbol === 'NAS100' || inst.symbol === 'US30' || inst.symbol === 'JP225' || inst.symbol === 'HK50'
-              ? (Math.random() - 0.49) * 1.8
+              ? (Math.random() - 0.5) * 1.8
               : inst.symbol === 'GER40' || inst.symbol === 'UK100' || inst.symbol === 'EU50' || inst.symbol === 'FRA40' || inst.symbol === 'US500' || inst.symbol === 'US2000'
-              ? (Math.random() - 0.49) * 0.65
+              ? (Math.random() - 0.5) * 0.65
               : (Math.random() - 0.5) * 0.015;
 
-          const nextPrice = Number((inst.price + step).toFixed(decimals));
+          const rawNext = inst.price + step;
+          const nextPrice = spec ? roundToTick(rawNext, spec) : Number(rawNext.toFixed(decimals));
           const direction: 'up' | 'down' | 'none' =
             nextPrice > inst.price ? 'up' : nextPrice < inst.price ? 'down' : 'none';
 
@@ -200,6 +209,18 @@ export default function App() {
     }
   };
 
+  const refreshMt5Status = async () => {
+    try {
+      const res = await fetch('/api/mt5/status');
+      if (res.ok) {
+        const data: MT5SessionState = await res.json();
+        setMt5State(data);
+      }
+    } catch (_err) {
+      // ignore transient error
+    }
+  };
+
   const handleToggleDocActive = (id: string) => {
     setDocuments((prev) =>
       prev.map((d) => (d.id === id ? { ...d, isActive: !d.isActive } : d))
@@ -235,8 +256,24 @@ export default function App() {
 
   const handleQuickRequestEntry = (symbol: string) => {
     setTargetAssetForAction(symbol);
+    setTargetStrategyForAction('AUTO');
     setActiveTab('entries');
   };
+
+  useEffect(() => {
+    const hiddenMap: Record<string, boolean> = {
+      scanner: !(settings.showScannerTab ?? true),
+      strategies: !(settings.showStrategiesTab ?? true),
+      mt5: !(settings.showMt5Tab ?? true),
+      newschat: !(settings.showNewsChatTab ?? true),
+      reports: !settings.showReportsTab,
+      knowledge: !settings.showKnowledgeTab,
+      calculator: !settings.showCalculatorTab,
+    };
+    if (hiddenMap[activeTab]) {
+      setActiveTab('terminal');
+    }
+  }, [activeTab, settings]);
 
   const handleQuickGenerateReport = (symbol: string) => {
     setTargetAssetForAction(symbol);
@@ -276,7 +313,9 @@ export default function App() {
         activeDocsCount={activeDocs.length}
         totalDocsCount={documents.length}
         settings={settings}
+        onUpdateSettings={handleUpdateSettings}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        mt5State={mt5State}
       />
 
       <main
@@ -312,6 +351,9 @@ export default function App() {
               setTargetAssetForAction(symbol);
               setActiveTab('entries');
             }}
+            mt5State={mt5State}
+            onRefreshMt5={refreshMt5Status}
+            onOpenMt5Hub={() => setActiveTab('mt5')}
           />
         )}
 
@@ -332,6 +374,20 @@ export default function App() {
             language={settings.language}
             marketMode={settings.instrumentMarketMode}
             enabledSymbols={settings.enabledSymbols}
+            mt5State={mt5State}
+            onRefreshMt5={refreshMt5Status}
+            onOpenMt5Hub={() => setActiveTab('mt5')}
+          />
+        )}
+
+        {activeTab === 'mt5' && (
+          <MT5ExecutionHub
+            mt5State={mt5State}
+            onRefreshMt5={refreshMt5Status}
+            language={settings.language}
+            defaultBalance={settings.defaultBalance}
+            onNavigateToEntries={() => setActiveTab('entries')}
+            onNavigateToScanner={() => setActiveTab('scanner')}
           />
         )}
 
@@ -387,6 +443,10 @@ export default function App() {
             fxRates={fxRates}
             marketMode={settings.instrumentMarketMode}
             enabledSymbols={settings.enabledSymbols}
+            instruments={instruments}
+            mt5State={mt5State}
+            onRefreshMt5={refreshMt5Status}
+            onOpenMt5Hub={() => setActiveTab('mt5')}
           />
         )}
       </main>
@@ -399,9 +459,13 @@ export default function App() {
               <span className="font-bold text-white">TRstudio</span>
               <span>•</span>
               <span>
-                {settings.language === 'en'
-                  ? '12 Primary CFD Indices • Multi-Index Scanner • 19 Financial Portals'
-                  : '12 Índices CFD Primarios • Escáner de Mejor Entrada • 19 Webs Financieras'}
+                {settings.instrumentMarketMode === 'futures_only'
+                  ? settings.language === 'en'
+                    ? 'Institutional Futures (CME / Eurex / COMEX) • Multi-Scanner • 19 Financial Portals'
+                    : 'Futuros Institucionales (CME / Eurex / COMEX) • Escáner de Mejor Entrada • 19 Webs Financieras'
+                  : settings.language === 'en'
+                  ? '12 Primary CFD Indices, Gold & FX • Multi-Index Scanner • 19 Financial Portals'
+                  : '12 Índices CFD Primarios, Oro y FX • Escáner de Mejor Entrada • 19 Webs Financieras'}
               </span>
             </div>
 

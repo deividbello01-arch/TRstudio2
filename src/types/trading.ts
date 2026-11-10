@@ -205,6 +205,95 @@ export const ONLY_INDEX_SYMBOLS: string[] = [
   'HK50',
 ];
 
+export type MT5BrokerPreset =
+  | 'FTMO'
+  | 'FundedNext'
+  | 'ICMarkets'
+  | 'Pepperstone'
+  | 'Exness'
+  | 'Eightcap'
+  | 'Darwinex'
+  | 'Custom';
+
+export type MT5ConnectionMode = 'integrated_web' | 'ea_bridge' | 'metaapi_cloud';
+
+export interface MT5LivePosition {
+  id: string;
+  ticket: string;
+  asset: string;
+  brokerSymbol: string;
+  action: 'BUY' | 'SELL';
+  orderType: 'MARKET' | 'LIMIT';
+  lots: number;
+  initialLots: number;
+  entryPrice: number;
+  currentPrice: number;
+  stopLoss: number;
+  takeProfit1: number;
+  takeProfit2: number;
+  floatingPnlUsd: number;
+  floatingR: number;
+  realizedPnlUsd: number;
+  riskUsd: number;
+  riskPercent: number;
+  playbookName: string;
+  status: 'OPEN' | 'BREAK_EVEN' | 'PARTIAL_TP1' | 'PENDING_LIMIT';
+  eaStatus?: 'SYNCED' | 'QUEUED' | 'WEB_SIM';
+  openedAt: string;
+}
+
+export interface MT5ClosedOrderHistory {
+  id: string;
+  ticket: string;
+  asset: string;
+  brokerSymbol: string;
+  action: 'BUY' | 'SELL';
+  lots: number;
+  entryPrice: number;
+  closePrice: number;
+  realizedPnlUsd: number;
+  playbookName: string;
+  closedAt: string;
+  closeReason: string;
+}
+
+export interface MT5SessionState {
+  connected: boolean;
+  login: string;
+  brokerServer: string;
+  brokerPreset: MT5BrokerPreset;
+  accountType: 'Prop Firm' | 'Live ECN' | 'Demo Quant';
+  connectionMode: MT5ConnectionMode;
+  metaApiConnected?: boolean;
+  eaLastSeenAt?: string | null;
+  eaPendingCount?: number;
+  balance: number;
+  initialBalance: number;
+  equity: number;
+  floatingPnlUsd: number;
+  realizedSessionPnlUsd: number;
+  symbolMap: Record<string, string>;
+  openPositions: MT5LivePosition[];
+  orderHistory: MT5ClosedOrderHistory[];
+  macosInstallerReady?: boolean;
+  macosInstallerPath?: string;
+}
+
+export interface MT5ExecuteOrderPayload {
+  asset: string;
+  action: 'BUY' | 'SELL';
+  orderType?: 'MARKET' | 'LIMIT';
+  lots: number;
+  entryPrice: number;
+  stopLoss: number;
+  takeProfit1: number;
+  takeProfit2: number;
+  playbookName?: string;
+  riskUsd?: number;
+  riskPercent?: number;
+  splitTpOrders?: boolean;
+}
+
 export interface AppSettings {
   theme: AppTheme;
   language: AppLanguage;
@@ -231,6 +320,7 @@ export interface AppSettings {
   showKnowledgeTab: boolean;
   showCalculatorTab: boolean;
   showNewsChatTab: boolean;
+  showMt5Tab?: boolean;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -256,4 +346,5 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   showKnowledgeTab: true,
   showCalculatorTab: true,
   showNewsChatTab: true,
+  showMt5Tab: true,
 };
