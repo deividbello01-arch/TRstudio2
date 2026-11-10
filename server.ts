@@ -15,6 +15,7 @@ import {
   formatDistance,
   SessionKey,
   TRADEABLE_INSTRUMENTS,
+  FUTURES_CONTRACT_MAP,
 } from './src/lib/instruments.ts';
 import { FINANCIAL_WEB_SOURCES, TRADING_STRATEGIES } from './src/lib/strategiesData.ts';
 
@@ -525,6 +526,11 @@ function buildDeterministicSetupForInstrument(params: {
   riskPercentage: number;
   specificNotes?: string;
   customDocument?: string;
+  selectedDocName?: string;
+  sourceMode?: 'online' | 'custom_base';
+  strategyId?: string;
+  preferredDirection?: 'AUTO' | 'BUY' | 'SELL';
+  marketMode?: 'all_programmed' | 'cfd_only' | 'futures_only';
   includeNews?: boolean;
   language?: string;
   currentKz: ReturnType<typeof getCurrentKillzone>;
@@ -548,6 +554,12 @@ function buildDeterministicSetupForInstrument(params: {
     accountBalance = 10000,
     riskPercentage = 0.5,
     specificNotes = '',
+    customDocument = '',
+    selectedDocName = '',
+    sourceMode = 'online',
+    strategyId = 'AUTO',
+    preferredDirection = 'AUTO',
+    marketMode = 'all_programmed',
     includeNews = true,
     language = 'es',
     currentKz,
@@ -557,6 +569,8 @@ function buildDeterministicSetupForInstrument(params: {
   const isEn = language === 'en';
   const inst = MARKET_INSTRUMENTS.find((i) => i.symbol === asset) || MARKET_INSTRUMENTS[0];
   const spec = getSpec(inst.symbol) || INSTRUMENTS[0];
+  const futuresSpec = FUTURES_CONTRACT_MAP[spec.symbol];
+  const isFuturesMode = marketMode === 'futures_only' && Boolean(futuresSpec);
 
   const dxy = MARKET_INSTRUMENTS.find((i) => i.symbol === 'DXY')!;
   const us10y = MARKET_INSTRUMENTS.find((i) => i.symbol === 'US10Y')!;
@@ -566,8 +580,9 @@ function buildDeterministicSetupForInstrument(params: {
   const posInRange = Math.max(0, Math.min(1, (inst.price - inst.low24h) / rangeSpan)); // 0 = low, 1 = high
   const isBullish24h = inst.changeNumeric >= 0;
 
-  // Determine direction from structure + momentum + user notes
+  // Determine direction from structure + momentum + user notes + preferredDirection
   const notesLower = (specificNotes || '').toLowerCase();
+  const docLower = (customDocument || '').toLowerCase();
   let action: 'BUY' | 'SELL' = isBullish24h ? 'BUY' : 'SELL';
 
   // If price is at extreme discount (<24% of daily range), favor bullish liquidity sweep reversal
@@ -578,10 +593,26 @@ function buildDeterministicSetupForInstrument(params: {
   if (aiOverride?.action === 'BUY' || aiOverride?.action === 'SELL') {
     action = aiOverride.action;
   }
-  if (notesLower.includes('venta') || notesLower.includes('sell') || notesLower.includes('short')) {
+  if (sourceMode === 'custom_base' && customDocument) {
+    if (
+      (docLower.includes('venta') || docLower.includes('bajista') || docLower.includes('sell') || docLower.includes('short')) &&
+      !(docLower.includes('compra') || docLower.includes('alcista') || docLower.includes('buy'))
+    ) {
+      action = 'SELL';
+    } else if (
+      (docLower.includes('compra') || docLower.includes('alcista') || docLower.includes('buy') || docLower.includes('long')) &&
+      !(docLower.includes('venta') || docLower.includes('bajista') || docLower.includes('sell'))
+    ) {
+      action = 'BUY';
+    }
+  }
+  if (notesLower.includes('venta') || notesLower.includes('sell') || notesLower.includes('short') || notesLower.includes('bajista')) {
     action = 'SELL';
-  } else if (notesLower.includes('compra') || notesLower.includes('buy') || notesLower.includes('long')) {
+  } else if (notesLower.includes('compra') || notesLower.includes('buy') || notesLower.includes('long') || notesLower.includes('alcista')) {
     action = 'BUY';
+  }
+  if (preferredDirection === 'BUY' || preferredDirection === 'SELL') {
+    action = preferredDirection;
   }
 
   const dirMult = action === 'BUY' ? 1 : -1;
@@ -618,46 +649,72 @@ function buildDeterministicSetupForInstrument(params: {
   const takeProfit1 = roundToTick(entryPrice + dirMult * exactStopDist * 1.8, spec);
   const takeProfit2 = roundToTick(entryPrice + dirMult * exactStopDist * 3.0, spec);
 
-  // Exact Risk & Lot Size Calculation
+  // Exact Risk & Lot Size / Futures Contract Calculation
   const safeBalance = Math.max(100, Number(accountBalance) || 10000);
   const safeRiskPct = Math.max(0.05, Math.min(5, Number(riskPercentage) || 0.5));
   const targetMonetaryRiskUsd = Number(((safeBalance * safeRiskPct) / 100).toFixed(2));
 
-  // Value in USD of 1.0 unit of price change per 1 standard lot
-  const usdPerPointPerLot = valuePerPointUsd(spec, liveFxRates);
-  const riskPerOneLotUsd = exactStopDist * usdPerPointPerLot;
-  const rawLots = riskPerOneLotUsd > 0 ? targetMonetaryRiskUsd / riskPerOneLotUsd : 0.01;
-  const recommendedLots = Math.max(0.01, Number(rawLots.toFixed(2)));
+  let usdPerPointPerLot = valuePerPointUsd(spec, liveFxRates);
+  let recommendedLots = 0.01;
+  let contractSpecLabel = '';
 
-  // Exact monetary loss if Stop Loss is hit with recommendedLots (important when min lot 0.01 is enforced on small accounts)
+  if (isFuturesMode && futuresSpec) {
+    const ccyRate =
+      spec.quoteCcy === 'USD' ? 1 : liveFxRates[spec.quoteCcy as keyof FxRates] || 1;
+    const microPtVal = futuresSpec.microPointValue ?? futuresSpec.stdPointValue;
+    const microUsdPerUnit =
+      spec.symbol === 'EURUSD' ? microPtVal * 1 : microPtVal * ccyRate;
+    const microRiskPerContract = exactStopDist * microUsdPerUnit;
+    const rawMicroContracts =
+      microRiskPerContract > 0 ? targetMonetaryRiskUsd / microRiskPerContract : 1;
+
+    usdPerPointPerLot = microUsdPerUnit;
+    recommendedLots = Math.max(1, Math.round(rawMicroContracts));
+    const activeFutTicker = futuresSpec.microTicker || futuresSpec.futuresTicker;
+    contractSpecLabel = isEn
+      ? `Futures (${activeFutTicker} • ${futuresSpec.exchange}) — $${(
+          spec.symbol === 'EURUSD' ? microPtVal * 0.0001 : microUsdPerUnit
+        ).toFixed(2)} USD / ${spec.symbol === 'EURUSD' ? 'pip' : 'pt'}`
+      : `Futuros (${activeFutTicker} • ${futuresSpec.exchange}) — $${(
+          spec.symbol === 'EURUSD' ? microPtVal * 0.0001 : microUsdPerUnit
+        ).toFixed(2)} USD / ${spec.symbol === 'EURUSD' ? 'pip' : 'pto'}`;
+  } else {
+    const riskPerOneLotUsd = exactStopDist * usdPerPointPerLot;
+    const rawLots = riskPerOneLotUsd > 0 ? targetMonetaryRiskUsd / riskPerOneLotUsd : 0.01;
+    recommendedLots = Math.max(0.01, Number(rawLots.toFixed(2)));
+
+    contractSpecLabel =
+      spec.kind === 'forex'
+        ? isEn
+          ? '1 Std Lot = 100,000 units ($10.00 USD / pip)'
+          : '1 Lote Estándar = 100,000 uds ($10.00 USD / pip)'
+        : spec.kind === 'metal'
+        ? isEn
+          ? '1 Std Lot = 100 oz ($100 USD per $1.00 move | $10/pip)'
+          : '1 Lote Estándar = 100 oz ($100 USD por cada $1.00 | $10/pip)'
+        : spec.quoteCcy === 'USD'
+        ? isEn
+          ? `1 CFD Lot = $${spec.contractValue.toFixed(2)} USD / pt`
+          : `1 Lote CFD = $${spec.contractValue.toFixed(2)} USD / pto`
+        : isEn
+        ? `1 CFD Lot = ${spec.contractValue} ${spec.quoteCcy}/pt (~$${usdPerPointPerLot.toFixed(2)} USD/pt)`
+        : `1 Lote CFD = ${spec.contractValue} ${spec.quoteCcy}/pto (~$${usdPerPointPerLot.toFixed(2)} USD/pto)`;
+  }
+
+  const riskPerOneLotUsd = exactStopDist * usdPerPointPerLot;
   const actualRiskAtStopUsd = Number((recommendedLots * riskPerOneLotUsd).toFixed(2));
   const projectedProfitTp1Usd = Number((actualRiskAtStopUsd * 1.8).toFixed(2));
   const projectedProfitTp2Usd = Number((actualRiskAtStopUsd * 3.0).toFixed(2));
 
   const stopDistanceStr = formatDistance(exactStopDist, spec, isEn);
 
-  const contractSpecLabel =
-    spec.kind === 'forex'
-      ? isEn
-        ? '1 Std Lot = 100,000 units ($10.00 USD / pip)'
-        : '1 Lote Estándar = 100,000 uds ($10.00 USD / pip)'
-      : spec.kind === 'metal'
-      ? isEn
-        ? '1 Std Lot = 100 oz ($100 USD per $1.00 move | $10/pip)'
-        : '1 Lote Estándar = 100 oz ($100 USD por cada $1.00 | $10/pip)'
-      : spec.quoteCcy === 'USD'
-      ? isEn
-        ? `1 CFD Lot = $${spec.contractValue.toFixed(2)} USD / pt`
-        : `1 Lote CFD = $${spec.contractValue.toFixed(2)} USD / pto`
-      : isEn
-      ? `1 CFD Lot = ${spec.contractValue} ${spec.quoteCcy}/pt (~$${usdPerPointPerLot.toFixed(2)} USD/pt)`
-      : `1 Lote CFD = ${spec.contractValue} ${spec.quoteCcy}/pto (~$${usdPerPointPerLot.toFixed(2)} USD/pto)`;
-
   const isMinLotWarning = actualRiskAtStopUsd > targetMonetaryRiskUsd * 1.15;
+  const unitWordEs = isFuturesMode ? 'contratos' : 'lotes';
+  const unitWordEn = isFuturesMode ? 'contracts' : 'lots';
   const hardDailyDrawdownAlert = isMinLotWarning
     ? isEn
-      ? `Target risk ${safeRiskPct}% is $${targetMonetaryRiskUsd.toFixed(2)} USD, but minimum broker lot (0.01) risks $${actualRiskAtStopUsd.toFixed(2)} USD (${((actualRiskAtStopUsd / safeBalance) * 100).toFixed(2)}%). Daily stop limit (-1.5%): -$${(safeBalance * 0.015).toFixed(2)} USD.`
-      : `Tu riesgo objetivo (${safeRiskPct}%) es $${targetMonetaryRiskUsd.toFixed(2)} USD; con el lote mínimo (0.01) el riesgo real en SL es $${actualRiskAtStopUsd.toFixed(2)} USD (${((actualRiskAtStopUsd / safeBalance) * 100).toFixed(2)}%). Límite diario (-1.5%): -$${(safeBalance * 0.015).toFixed(2)} USD.`
+      ? `Target risk ${safeRiskPct}% is $${targetMonetaryRiskUsd.toFixed(2)} USD, while minimum size (${recommendedLots} ${unitWordEn}) risks $${actualRiskAtStopUsd.toFixed(2)} USD (${((actualRiskAtStopUsd / safeBalance) * 100).toFixed(2)}%). Daily stop limit (-1.5%): -$${(safeBalance * 0.015).toFixed(2)} USD.`
+      : `Tu riesgo objetivo (${safeRiskPct}%) es $${targetMonetaryRiskUsd.toFixed(2)} USD; con el mínimo (${recommendedLots} ${unitWordEs}) el riesgo real en SL es $${actualRiskAtStopUsd.toFixed(2)} USD (${((actualRiskAtStopUsd / safeBalance) * 100).toFixed(2)}%). Límite diario (-1.5%): -$${(safeBalance * 0.015).toFixed(2)} USD.`
     : isEn
     ? `Exact loss at Stop Loss: -$${actualRiskAtStopUsd.toFixed(2)} USD (${safeRiskPct}%). Profit at TP1: +$${projectedProfitTp1Usd.toFixed(2)} | TP2: +$${projectedProfitTp2Usd.toFixed(2)}. Daily circuit breaker (-1.5%): -$${(safeBalance * 0.015).toFixed(2)} USD.`
     : `Pérdida exacta en Stop Loss: -$${actualRiskAtStopUsd.toFixed(2)} USD (${safeRiskPct}%). Ganancia en TP1: +$${projectedProfitTp1Usd.toFixed(2)} | TP2: +$${projectedProfitTp2Usd.toFixed(2)}. Límite diario (-1.5%): -$${(safeBalance * 0.015).toFixed(2)} USD.`;
@@ -711,7 +768,7 @@ function buildDeterministicSetupForInstrument(params: {
     }
   }
   if (!includeNews) {
-    interScore = Math.max(14, interScore);
+    interScore = Math.max(15, interScore);
   }
 
   // 5. Execution Trigger Score (Max 15)
@@ -769,9 +826,28 @@ function buildDeterministicSetupForInstrument(params: {
       : `Probabilidad del ${winProbability}% porque ${spec.symbol} está fuera de su ventana óptima de liquidez. Revisa el Escáner de Mejores Entradas.`;
   }
 
-  // Pick matching strategy playbook based on region & session
+  // Pick matching strategy playbook based on explicit strategyId, custom base, or region & session
   let matchedStrat = TRADING_STRATEGIES[0];
-  if (spec.region === 'EU' || spec.region === 'UK' || currentKz.sessionKey === 'london') {
+  const explicitStrat =
+    strategyId && strategyId !== 'AUTO'
+      ? TRADING_STRATEGIES.find((s) => s.id === strategyId || s.code === strategyId)
+      : undefined;
+
+  if (explicitStrat) {
+    matchedStrat = explicitStrat;
+  } else if (sourceMode === 'custom_base' && (selectedDocName || customDocument)) {
+    const combinedText = `${selectedDocName} ${customDocument.slice(0, 600)}`.toLowerCase();
+    const byDoc = TRADING_STRATEGIES.find(
+      (s) =>
+        combinedText.includes(s.code.toLowerCase()) ||
+        combinedText.includes(s.nameEs.toLowerCase().slice(0, 14)) ||
+        combinedText.includes(s.nameEn.toLowerCase().slice(0, 14))
+    );
+    if (byDoc) matchedStrat = byDoc;
+    else if (spec.region === 'EU' || spec.region === 'UK' || currentKz.sessionKey === 'london') {
+      matchedStrat = TRADING_STRATEGIES[1];
+    }
+  } else if (spec.region === 'EU' || spec.region === 'UK' || currentKz.sessionKey === 'london') {
     matchedStrat = TRADING_STRATEGIES[1]; // Asian Range Sweep & London Judas
   } else if (spec.symbol === 'XAUUSD') {
     matchedStrat = TRADING_STRATEGIES[4]; // COMEX Expansion & Real Yields
@@ -784,15 +860,55 @@ function buildDeterministicSetupForInstrument(params: {
   }
 
   const playbookName =
-    aiOverride?.playbookName ||
-    (isEn ? `${matchedStrat.code}: ${matchedStrat.nameEn}` : `${matchedStrat.code}: ${matchedStrat.nameEs}`);
+    explicitStrat
+      ? isEn
+        ? `${explicitStrat.code}: ${explicitStrat.nameEn}`
+        : `${explicitStrat.code}: ${explicitStrat.nameEs}`
+      : sourceMode === 'custom_base' && selectedDocName
+      ? `${matchedStrat.code} • ${selectedDocName}`
+      : aiOverride?.playbookName ||
+        (isEn ? `${matchedStrat.code}: ${matchedStrat.nameEn}` : `${matchedStrat.code}: ${matchedStrat.nameEs}`);
 
   const externalSources = buildExternalTraceabilitySources(spec.symbol);
-  const ownDeclaration = buildOwnAnalysisDeclaration(spec.symbol, currentKz, safeRiskPct, includeNews, language);
+  const baseDeclaration = buildOwnAnalysisDeclaration(spec.symbol, currentKz, safeRiskPct, includeNews, language);
+  const ownDeclaration =
+    sourceMode === 'custom_base' && selectedDocName
+      ? isEn
+        ? `[Applied Base: "${selectedDocName}"] • ${baseDeclaration}`
+        : `[Base Aplicada: "${selectedDocName}"] • ${baseDeclaration}`
+      : baseDeclaration;
+
+  const macroContextSnippetEs = includeNews
+    ? ` Confluencia macro activa: DXY en ${dxy.price} (${dxy.change24h}), Bono US10Y en ${us10y.price}% (${us10y.change24h}) y VIX en ${vix.price}.`
+    : ' Filtro Técnico Puro activado (noticias macro excluidas por configuración del usuario).';
+  const macroContextSnippetEn = includeNews
+    ? ` Active macro confluence: DXY at ${dxy.price} (${dxy.change24h}), US10Y yield at ${us10y.price}% (${us10y.change24h}), and VIX at ${vix.price}.`
+    : ' Pure Technical Price Action filter active (macro news excluded per user setting).';
+
+  const customBaseSnippetEs =
+    sourceMode === 'custom_base' && selectedDocName
+      ? ` Calculado aplicando las reglas de la base "${selectedDocName}".`
+      : '';
+  const customBaseSnippetEn =
+    sourceMode === 'custom_base' && selectedDocName
+      ? ` Calculated applying the rules from base "${selectedDocName}".`
+      : '';
+
+  const notesSnippetEs = specificNotes.trim()
+    ? ` Nota del operador integrada: "${specificNotes.trim()}".`
+    : '';
+  const notesSnippetEn = specificNotes.trim()
+    ? ` Trader note integrated: "${specificNotes.trim()}".`
+    : '';
+
+  const displayAssetLabel =
+    isFuturesMode && futuresSpec
+      ? `${spec.symbol} (${futuresSpec.futuresTicker} • ${isEn ? futuresSpec.nameEn : futuresSpec.nameEs})`
+      : `${spec.symbol} (${isEn ? spec.nameEn : spec.nameEs})`;
 
   const defaultThesis = isEn
-    ? `${spec.symbol} (${spec.nameEn}) trades at ${inst.price.toLocaleString()} (${inst.change24h}) inside the 24h range ${inst.low24h.toLocaleString()} – ${inst.high24h.toLocaleString()} (ATR: ${inst.atr14}). Looking for ${action === 'BUY' ? 'bullish absorption in discount' : 'bearish supply rejection in premium'} at ${entryPrice} targeting TP1 ${takeProfit1} (+$${projectedProfitTp1Usd}) and TP2 ${takeProfit2} (+$${projectedProfitTp2Usd}) with Stop Loss at ${stopLoss} (-$${actualRiskAtStopUsd}).`
-    : `${spec.symbol} (${spec.nameEs}) cotiza en ${inst.price.toLocaleString()} (${inst.change24h}) dentro del rango 24h de ${inst.low24h.toLocaleString()} – ${inst.high24h.toLocaleString()} (ATR: ${inst.atr14}). Se proyecta ${action === 'BUY' ? 'absorción compradora en descuento' : 'rechazo vendedor en zona premium'} sobre ${entryPrice} buscando TP1 ${takeProfit1} (+$${projectedProfitTp1Usd}) y TP2 ${takeProfit2} (+$${projectedProfitTp2Usd}), protegiendo con Stop Loss en ${stopLoss} (-$${actualRiskAtStopUsd}).`;
+    ? `${displayAssetLabel} trades at ${inst.price.toLocaleString()} (${inst.change24h}) inside the 24h range ${inst.low24h.toLocaleString()} – ${inst.high24h.toLocaleString()} (ATR: ${inst.atr14}). Strategy ${playbookName} projects ${action === 'BUY' ? 'bullish absorption in discount' : 'bearish supply rejection in premium'} at ${entryPrice} targeting TP1 ${takeProfit1} (+$${projectedProfitTp1Usd}) and TP2 ${takeProfit2} (+$${projectedProfitTp2Usd}) with Stop Loss at ${stopLoss} (-$${actualRiskAtStopUsd}).${macroContextSnippetEn}${customBaseSnippetEn}${notesSnippetEn}`
+    : `${displayAssetLabel} cotiza en ${inst.price.toLocaleString()} (${inst.change24h}) dentro del rango 24h de ${inst.low24h.toLocaleString()} – ${inst.high24h.toLocaleString()} (ATR: ${inst.atr14}). Mediante ${playbookName} se proyecta ${action === 'BUY' ? 'absorción compradora en descuento' : 'rechazo vendedor en zona premium'} sobre ${entryPrice} buscando TP1 ${takeProfit1} (+$${projectedProfitTp1Usd}) y TP2 ${takeProfit2} (+$${projectedProfitTp2Usd}), protegiendo con Stop Loss en ${stopLoss} (-$${actualRiskAtStopUsd}).${macroContextSnippetEs}${customBaseSnippetEs}${notesSnippetEs}`;
 
   const defaultInvalidation = isEn
     ? `Invalidated if a 15M candle closes with a full body ${action === 'BUY' ? 'below' : 'above'} ${stopLoss}, or if price hits ${takeProfit1} before triggering the entry at ${entryPrice}.`
@@ -800,19 +916,26 @@ function buildDeterministicSetupForInstrument(params: {
 
   const defaultTips = isEn
     ? [
-        `Execute ${recommendedLots} lots so Stop Loss (${stopDistanceStr}) risks -$${actualRiskAtStopUsd.toFixed(2)} USD.`,
+        `Execute ${recommendedLots} ${unitWordEn} (${contractSpecLabel}) so Stop Loss (${stopDistanceStr}) risks -$${actualRiskAtStopUsd.toFixed(2)} USD.`,
         `Close 50% at TP1 (${takeProfit1}) and move Stop Loss to Break Even (${entryPrice}).`,
         `Let the remaining 50% run toward TP2 (${takeProfit2}) for a 1:3.0 R:R (+$${projectedProfitTp2Usd.toFixed(2)} USD).`,
+        ...(specificNotes.trim() ? [`User instruction applied: "${specificNotes.trim()}"`] : []),
       ]
     : [
-        `Ejecutar ${recommendedLots} lotes para que el Stop Loss (${stopDistanceStr}) represente exactamente -$${actualRiskAtStopUsd.toFixed(2)} USD.`,
+        `Ejecutar ${recommendedLots} ${unitWordEs} (${contractSpecLabel}) para que el Stop Loss (${stopDistanceStr}) represente -$${actualRiskAtStopUsd.toFixed(2)} USD.`,
         `Cerrar 50% de la posición en TP1 (${takeProfit1}) y mover el Stop Loss a Break Even (${entryPrice}).`,
         `Dejar correr el resto hacia TP2 (${takeProfit2}) para un 1:3.0 R:R (+$${projectedProfitTp2Usd.toFixed(2)} USD).`,
+        ...(specificNotes.trim() ? [`Instrucción del operador aplicada: "${specificNotes.trim()}"`] : []),
       ];
 
   return {
     asset: spec.symbol,
-    assetName: isEn ? spec.nameEn : spec.nameEs,
+    assetName:
+      isFuturesMode && futuresSpec
+        ? `${futuresSpec.futuresTicker} • ${isEn ? futuresSpec.nameEn : futuresSpec.nameEs}`
+        : isEn
+        ? spec.nameEn
+        : spec.nameEs,
     region: spec.region,
     action,
     playbookName,
@@ -849,7 +972,9 @@ function buildDeterministicSetupForInstrument(params: {
       contractSizeSpec: contractSpecLabel,
       hardDailyDrawdownAlert,
     },
-    thesisRationale: aiOverride?.thesisRationale || defaultThesis,
+    thesisRationale: aiOverride?.thesisRationale
+      ? `${aiOverride.thesisRationale}${customBaseSnippetEs}${notesSnippetEs}`
+      : defaultThesis,
     invalidationCriteria: aiOverride?.invalidationCriteria || defaultInvalidation,
     executionTips:
       Array.isArray(aiOverride?.executionTips) && aiOverride.executionTips.length > 0
@@ -895,6 +1020,7 @@ app.post('/api/scan-best-setups', async (req, res) => {
     filterCategory = 'ALL', // 'ALL' | 'INDICES' | 'US_INDICES' | 'EU_ASIA_INDICES' | 'METALS_FX'
     includeNews = true,
     customDocument = '',
+    marketMode = 'all_programmed',
     language = 'es',
   } = req.body || {};
 
@@ -915,6 +1041,7 @@ app.post('/api/scan-best-setups', async (req, res) => {
       accountBalance: Number(accountBalance) || 10000,
       riskPercentage: Number(riskPercentage) || 0.50,
       customDocument,
+      marketMode,
       includeNews: Boolean(includeNews),
       language,
       currentKz,
@@ -1170,25 +1297,80 @@ IMPORTANTE: Ve directo a los niveles, dirección, puntos de interés y plan oper
       session: currentKz.name,
     });
   } catch (_err: any) {
-    const inst = MARKET_INSTRUMENTS.find((i) => i.symbol === asset) || MARKET_INSTRUMENTS[0];
-    const spec = getSpec(inst.symbol) || INSTRUMENTS[0];
     const dxy = MARKET_INSTRUMENTS.find((i) => i.symbol === 'DXY')!;
     const us10y = MARKET_INSTRUMENTS.find((i) => i.symbol === 'US10Y')!;
     const vix = MARKET_INSTRUMENTS.find((i) => i.symbol === 'VIX')!;
-    const externalSources = buildExternalTraceabilitySources(asset);
-    const mid = ((inst.high24h + inst.low24h) / 2).toFixed(spec.decimals);
-    const setupCalc = buildDeterministicSetupForInstrument({
-      asset: inst.symbol,
-      accountBalance: 10000,
-      riskPercentage: 0.5,
-      includeNews: Boolean(includeNews),
-      language,
-      currentKz,
-    });
+    const externalSources = buildExternalTraceabilitySources(asset === 'TODOS' ? 'NAS100' : asset);
 
-    const baseReport = isEn
-      ? `# Market Action Report: ${asset} (${timeframe})
-**NY Time:** ${currentKz.nyTime} | **Session:** ${currentKz.name} (${currentKz.windowHours})
+    let baseReport = '';
+
+    if (asset === 'TODOS' || asset === 'ALL') {
+      const summarySymbols = ['NAS100', 'US500', 'US30', 'GER40', 'XAUUSD', 'EURUSD'];
+      const rowsEs = summarySymbols
+        .map((sym) => {
+          const item = MARKET_INSTRUMENTS.find((m) => m.symbol === sym) || MARKET_INSTRUMENTS[0];
+          const sc = buildDeterministicSetupForInstrument({
+            asset: sym,
+            accountBalance: 10000,
+            riskPercentage: 0.5,
+            includeNews: Boolean(includeNews),
+            language,
+            currentKz,
+          });
+          return `- **${sym} (${item.name}):** Precio **${item.price.toLocaleString()}** (${item.change24h}) | Rango: ${item.low24h.toLocaleString()} – ${item.high24h.toLocaleString()} | **${sc.action}** en **${sc.prices.entryPrice}** (SL: ${sc.prices.stopLoss} | TP2: ${sc.prices.takeProfit2} | Acierto: **${sc.winProbability}%**)`;
+        })
+        .join('\n');
+
+      const rowsEn = summarySymbols
+        .map((sym) => {
+          const item = MARKET_INSTRUMENTS.find((m) => m.symbol === sym) || MARKET_INSTRUMENTS[0];
+          const sc = buildDeterministicSetupForInstrument({
+            asset: sym,
+            accountBalance: 10000,
+            riskPercentage: 0.5,
+            includeNews: Boolean(includeNews),
+            language,
+            currentKz,
+          });
+          return `- **${sym} (${item.name}):** Price **${item.price.toLocaleString()}** (${item.change24h}) | Range: ${item.low24h.toLocaleString()} – ${item.high24h.toLocaleString()} | **${sc.action}** at **${sc.prices.entryPrice}** (SL: ${sc.prices.stopLoss} | TP2: ${sc.prices.takeProfit2} | Win Prob: **${sc.winProbability}%**)`;
+        })
+        .join('\n');
+
+      baseReport = isEn
+        ? `# Multi-Asset Market Report: ALL PRIMARY ASSETS (${timeframe})
+**NY Time:** ${currentKz.nyTime} | **Session:** ${currentKz.name} (${currentKz.windowHours}) | **Focus:** ${focusArea}
+
+## 1. Live Multi-Index, Gold & Forex Summary
+${rowsEn}
+
+## 2. Macro & Intermarket Drivers
+- **DXY Dollar Index:** **${dxy.price}** (${dxy.change24h}) | **US10Y Yield:** **${us10y.price}%** (${us10y.change24h}) | **VIX Volatility:** **${vix.price}** (${vix.change24h}).
+- **Recommended Session Focus:** ${currentKz.recommendedAssets.join(', ')}.`
+        : `# Reporte Multi-Activo: TODOS LOS ÍNDICES Y ACTIVOS (${timeframe})
+**Hora NY:** ${currentKz.nyTime} | **Sesión:** ${currentKz.name} (${currentKz.windowHours}) | **Enfoque:** ${focusArea}
+
+## 1. Resumen Operativo de Índices, Oro y Forex en Vivo
+${rowsEs}
+
+## 2. Indicadores Macro e Intermercado
+- **Índice Dólar (DXY):** **${dxy.price}** (${dxy.change24h}) | **Bono 10 Años (US10Y):** **${us10y.price}%** (${us10y.change24h}) | **Volatilidad (VIX):** **${vix.price}** (${vix.change24h}).
+- **Activos con Mayor Liquidez en esta Sesión:** ${currentKz.recommendedAssets.join(', ')}.`;
+    } else {
+      const inst = MARKET_INSTRUMENTS.find((i) => i.symbol === asset) || MARKET_INSTRUMENTS[0];
+      const spec = getSpec(inst.symbol) || INSTRUMENTS[0];
+      const mid = ((inst.high24h + inst.low24h) / 2).toFixed(spec.decimals);
+      const setupCalc = buildDeterministicSetupForInstrument({
+        asset: inst.symbol,
+        accountBalance: 10000,
+        riskPercentage: 0.5,
+        includeNews: Boolean(includeNews),
+        language,
+        currentKz,
+      });
+
+      baseReport = isEn
+        ? `# Market Action Report: ${asset} (${timeframe})
+**NY Time:** ${currentKz.nyTime} | **Session:** ${currentKz.name} (${currentKz.windowHours}) | **Focus:** ${focusArea}
 
 ## 1. Live Price & Key Levels
 - **Current Price:** **${inst.price.toLocaleString()}** (${inst.change24h}) | **ATR (14):** ${inst.atr14}
@@ -1202,11 +1384,11 @@ IMPORTANTE: Ve directo a los niveles, dirección, puntos de interés y plan oper
 - **Take Profit 1 (1:1.8):** **${setupCalc.prices.takeProfit1}** | **Take Profit 2 (1:3.0):** **${setupCalc.prices.takeProfit2}**
 ${
   includeNews
-    ? `\n## 3. Macro & Intermarket Context\n- **DXY:** ${dxy.price} (${dxy.change24h}) | **10Y Yield (US10Y):** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h}).\n- Monitor high-impact releases at 8:30 AM and 10:00 AM (NY Time).`
-    : `\n## 3. Pure Technical Focus\n- Evaluation strictly centered on candle structure, session liquidity, and 5M/15M confirmation (news filter disabled).`
+    ? `\n## 3. Macro & Intermarket Context (${focusArea})\n- **DXY:** ${dxy.price} (${dxy.change24h}) | **10Y Yield (US10Y):** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h}).\n- Monitor high-impact releases at 8:30 AM and 10:00 AM (NY Time).`
+    : `\n## 3. Pure Technical Focus (${focusArea})\n- Evaluation strictly centered on candle structure, session liquidity, and 5M/15M confirmation (news filter disabled).`
 }`
-      : `# Reporte Operativo: ${asset} (${timeframe})
-**Hora NY:** ${currentKz.nyTime} | **Sesión:** ${currentKz.name} (${currentKz.windowHours})
+        : `# Reporte Operativo: ${asset} (${timeframe})
+**Hora NY:** ${currentKz.nyTime} | **Sesión:** ${currentKz.name} (${currentKz.windowHours}) | **Enfoque:** ${focusArea}
 
 ## 1. Precio y Niveles Clave
 - **Cotización Actual:** **${inst.price.toLocaleString()}** (${inst.change24h}) | **ATR (14):** ${inst.atr14}
@@ -1220,9 +1402,10 @@ ${
 - **Take Profit 1 (1:1.8):** **${setupCalc.prices.takeProfit1}** | **Take Profit 2 (1:3.0):** **${setupCalc.prices.takeProfit2}**
 ${
   includeNews
-    ? `\n## 3. Contexto Macro e Intermercado\n- **DXY:** ${dxy.price} (${dxy.change24h}) | **Bono 10Y (US10Y):** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h}).\n- Vigilar publicaciones de carpeta roja a las 8:30 AM y 10:00 AM (hora NY).`
-    : `\n## 3. Enfoque Técnico Puro\n- Evaluación centrada estrictamente en estructura de velas, liquidez de sesión y confirmación en 5M/15M (filtro de noticias desactivado).`
+    ? `\n## 3. Contexto Macro e Intermercado (${focusArea})\n- **DXY:** ${dxy.price} (${dxy.change24h}) | **Bono 10Y (US10Y):** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h}).\n- Vigilar publicaciones de carpeta roja a las 8:30 AM y 10:00 AM (hora NY).`
+    : `\n## 3. Enfoque Técnico Puro (${focusArea})\n- Evaluación centrada estrictamente en estructura de velas, liquidez de sesión y confirmación en 5M/15M (filtro de noticias desactivado).`
 }`;
+    }
 
     const fallbackReport =
       baseReport + formatAuditAttributionMarkdown(asset, currentKz, externalSources, ownDeclaration, language);
@@ -1254,8 +1437,12 @@ app.post('/api/generate-trade-setup', async (req, res) => {
     accountBalance = 10000,
     riskPercentage = 0.50,
     specificNotes = '',
-    customDocument,
+    customDocument = '',
+    selectedDocName = '',
     sourceMode = 'online',
+    strategyId = 'AUTO',
+    preferredDirection = 'AUTO',
+    marketMode = 'all_programmed',
     includeNews = true,
     language = 'es',
   } = req.body;
@@ -1274,12 +1461,22 @@ app.post('/api/generate-trade-setup', async (req, res) => {
 
     const analysisRule =
       sourceMode === 'custom_base' && customDocument
-        ? `Use this user analysis/strategy to structure the entry:\n${customDocument.substring(0, 4500)}`
+        ? `Use this user analysis/strategy ("${selectedDocName || 'Custom Base'}") to structure the entry:\n${customDocument.substring(0, 4500)}`
         : `Research and structure the entry based on live prices and top financial sources:\n${webSourcesPromptContent}`;
 
+    const strategyOverrideRule =
+      strategyId && strategyId !== 'AUTO'
+        ? `Apply strategy ID "${strategyId}".`
+        : '';
+
+    const directionRule =
+      preferredDirection === 'BUY' || preferredDirection === 'SELL'
+        ? `Required trade direction: ${preferredDirection}.`
+        : '';
+
     const prompt = isEn
-      ? `Evaluate a practical trading entry in ENGLISH for ${asset}. Account Balance: $${accountBalance}, Risk: ${riskPercentage}%. User Notes: "${specificNotes}". NY Time: ${currentKz.nyTime}. Live Quotes: ${liveSnapshot}.\n${newsRule}`
-      : `Evalúa una entrada práctica y directa en ESPAÑOL para ${asset}. Balance: $${accountBalance}, Riesgo: ${riskPercentage}%. Notas: "${specificNotes}". Hora NY: ${currentKz.nyTime}. Cotizaciones: ${liveSnapshot}.\n${newsRule}`;
+      ? `Evaluate a practical trading entry in ENGLISH for ${asset}. Account Balance: $${accountBalance}, Risk: ${riskPercentage}%. ${strategyOverrideRule} ${directionRule} User Notes: "${specificNotes}". NY Time: ${currentKz.nyTime}. Live Quotes: ${liveSnapshot}.\n${newsRule}`
+      : `Evalúa una entrada práctica y directa en ESPAÑOL para ${asset}. Balance: $${accountBalance}, Riesgo: ${riskPercentage}%. ${strategyOverrideRule} ${directionRule} Notas: "${specificNotes}". Hora NY: ${currentKz.nyTime}. Cotizaciones: ${liveSnapshot}.\n${newsRule}`;
 
     const systemInstruction = `Eres el motor cuantitativo de entradas de TRstudio. Devuelve un JSON válido en ${isEn ? 'INGLÉS (English)' : 'ESPAÑOL'}.\n${analysisRule}`;
 
@@ -1325,6 +1522,11 @@ app.post('/api/generate-trade-setup', async (req, res) => {
       riskPercentage: Number(riskPercentage) || 0.50,
       specificNotes,
       customDocument,
+      selectedDocName,
+      sourceMode,
+      strategyId,
+      preferredDirection,
+      marketMode,
       includeNews: Boolean(includeNews),
       language,
       currentKz,
@@ -1351,6 +1553,11 @@ app.post('/api/generate-trade-setup', async (req, res) => {
       riskPercentage: Number(riskPercentage) || 0.50,
       specificNotes,
       customDocument,
+      selectedDocName,
+      sourceMode,
+      strategyId,
+      preferredDirection,
+      marketMode,
       includeNews: Boolean(includeNews),
       language,
       currentKz,

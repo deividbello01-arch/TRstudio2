@@ -53,19 +53,20 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
   const [copied, setCopied] = useState<boolean>(false);
 
   React.useEffect(() => {
-    if (
-      initialAsset &&
-      (initialAsset === 'TODOS' || visibleInstruments.some((i) => i.symbol === initialAsset))
-    ) {
+    if (initialAsset) {
       setSelectedAsset(initialAsset);
-    } else if (
+    }
+  }, [initialAsset]);
+
+  React.useEffect(() => {
+    if (
       selectedAsset !== 'TODOS' &&
-      !visibleInstruments.some((i) => i.symbol === selectedAsset) &&
-      visibleInstruments.length > 0
+      visibleInstruments.length > 0 &&
+      !visibleInstruments.some((i) => i.symbol === selectedAsset)
     ) {
       setSelectedAsset(visibleInstruments[0].symbol);
     }
-  }, [initialAsset, enabledSymbols, selectedAsset, visibleInstruments]);
+  }, [enabledSymbols]);
 
   const assets = [
     ...visibleInstruments.map((i) => {

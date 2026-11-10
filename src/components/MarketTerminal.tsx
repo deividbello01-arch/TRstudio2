@@ -660,6 +660,7 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
               language={settings.language}
               marketMode={settings.instrumentMarketMode}
               enabledSymbols={settings.enabledSymbols}
+              theme={settings.theme}
             />
           ) : (
             selectedInstrument && (

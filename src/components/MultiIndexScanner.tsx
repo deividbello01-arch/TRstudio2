@@ -79,6 +79,7 @@ export const MultiIndexScanner: React.FC<MultiIndexScannerProps> = ({
           riskPercentage,
           filterCategory: activeCat,
           includeNews,
+          marketMode,
           language,
         }),
       });
@@ -101,7 +102,7 @@ export const MultiIndexScanner: React.FC<MultiIndexScannerProps> = ({
 
   useEffect(() => {
     runScanner();
-  }, [language, includeNews]);
+  }, [language, includeNews, marketMode]);
 
   const handleCopySetup = (setup: TradeSetup) => {
     const text = `

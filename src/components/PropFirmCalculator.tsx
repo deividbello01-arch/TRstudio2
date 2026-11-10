@@ -43,7 +43,7 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
     if (!visibleInstruments.some((i) => i.symbol === selectedAsset) && visibleInstruments.length > 0) {
       setSelectedAsset(visibleInstruments[0].symbol);
     }
-  }, [enabledSymbols, selectedAsset, visibleInstruments]);
+  }, [enabledSymbols]);
 
   useEffect(() => {
     setBalance(defaultBalance || 10000);

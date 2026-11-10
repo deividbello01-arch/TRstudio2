@@ -18,16 +18,22 @@ import {
   Newspaper,
   Plus,
   Target,
+  BookOpen,
+  LineChart,
+  X,
 } from 'lucide-react';
 import { TradeSetup, KillzoneSession, CustomDocument, AppLanguage, InstrumentMarketMode } from '../types/trading';
 import { getEnabledTradeableInstruments, FUTURES_CONTRACT_MAP } from '../lib/instruments';
+import { TRADING_STRATEGIES } from '../lib/strategiesData';
 
 interface TradeSetupEngineProps {
   initialAsset?: string;
+  initialStrategyId?: string;
   session: KillzoneSession | null;
   documents: CustomDocument[];
   onAddCustomDoc?: (name: string, content: string, description: string) => void;
   onOpenKnowledgeTab?: () => void;
+  onSelectAssetInChart?: (symbol: string) => void;
   defaultBalance?: number;
   defaultRisk?: number;
   language?: AppLanguage;
@@ -37,8 +43,11 @@ interface TradeSetupEngineProps {
 
 export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
   initialAsset = 'NAS100',
+  initialStrategyId = 'AUTO',
   documents,
+  onAddCustomDoc,
   onOpenKnowledgeTab,
+  onSelectAssetInChart,
   defaultBalance = 6000,
   defaultRisk = 0.50,
   language = 'es',
@@ -50,6 +59,13 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
   const [selectedAsset, setSelectedAsset] = useState<string>(initialAsset);
   const [accountBalance, setAccountBalance] = useState<number>(defaultBalance);
   const [riskPercentage, setRiskPercentage] = useState<number>(defaultRisk);
+  const [selectedStrategyId, setSelectedStrategyId] = useState<string>(initialStrategyId || 'AUTO');
+  const [preferredDirection, setPreferredDirection] = useState<'AUTO' | 'BUY' | 'SELL'>('AUTO');
+
+  // Inline Quick-Add Base state
+  const [showQuickAddBase, setShowQuickAddBase] = useState<boolean>(false);
+  const [quickBaseName, setQuickBaseName] = useState<string>('');
+  const [quickBaseContent, setQuickBaseContent] = useState<string>('');
 
   React.useEffect(() => {
     setAccountBalance(defaultBalance);
@@ -58,6 +74,12 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
   React.useEffect(() => {
     setRiskPercentage(defaultRisk);
   }, [defaultRisk]);
+
+  React.useEffect(() => {
+    if (initialStrategyId) {
+      setSelectedStrategyId(initialStrategyId);
+    }
+  }, [initialStrategyId]);
 
   const [sourceMode, setSourceMode] = useState<'online' | 'custom_base'>('online');
   const [selectedDocId, setSelectedDocId] = useState<string>(() => {
@@ -76,15 +98,19 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
     documents.find((d) => d.id === selectedDocId) || customDocs[0] || documents[0];
 
   React.useEffect(() => {
-    if (initialAsset && visibleInstruments.some((i) => i.symbol === initialAsset)) {
+    if (initialAsset) {
       setSelectedAsset(initialAsset);
-    } else if (
-      !visibleInstruments.some((i) => i.symbol === selectedAsset) &&
-      visibleInstruments.length > 0
+    }
+  }, [initialAsset]);
+
+  React.useEffect(() => {
+    if (
+      visibleInstruments.length > 0 &&
+      !visibleInstruments.some((i) => i.symbol === selectedAsset)
     ) {
       setSelectedAsset(visibleInstruments[0].symbol);
     }
-  }, [initialAsset, enabledSymbols, selectedAsset, visibleInstruments]);
+  }, [enabledSymbols]);
 
   const assets = visibleInstruments.map((inst) => {
     const fut = FUTURES_CONTRACT_MAP[inst.symbol];
@@ -98,6 +124,26 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
     };
   });
 
+  const handleSaveQuickBase = () => {
+    if (!quickBaseName.trim() || !quickBaseContent.trim() || !onAddCustomDoc) return;
+    onAddCustomDoc(
+      quickBaseName.trim(),
+      quickBaseContent.trim(),
+      isEn ? 'Created from Entry Generator' : 'Creado desde Generador de Entradas'
+    );
+    setQuickBaseName('');
+    setQuickBaseContent('');
+    setShowQuickAddBase(false);
+    setSourceMode('custom_base');
+  };
+
+  // Auto-select newest custom doc when documents list grows
+  React.useEffect(() => {
+    if (documents.length > 0 && documents[0].type === 'custom') {
+      setSelectedDocId(documents[0].id);
+    }
+  }, [documents.length]);
+
   const handleRequestTradeSetup = async () => {
     setIsLoading(true);
     setError(null);
@@ -108,11 +154,15 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           asset: selectedAsset,
-          accountBalance,
-          riskPercentage,
+          accountBalance: Number(accountBalance) || 10000,
+          riskPercentage: Number(riskPercentage) || 0.50,
           sourceMode,
           includeNews,
-          customDocument: sourceMode === 'custom_base' ? chosenDoc?.content : '',
+          customDocument: sourceMode === 'custom_base' ? chosenDoc?.content || '' : '',
+          selectedDocName: sourceMode === 'custom_base' ? chosenDoc?.name || '' : '',
+          strategyId: selectedStrategyId,
+          preferredDirection,
+          marketMode,
           specificNotes: userNotes,
           language,
         }),
@@ -360,63 +410,153 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
                 </div>
               </div>
 
-              {onOpenKnowledgeTab && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenKnowledgeTab();
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-[#24170f] hover:bg-amber-700 text-amber-200 hover:text-white border border-[#4d3221] text-[11px] font-mono flex items-center gap-1 shrink-0 transition"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>{isEn ? 'Add in Bases' : 'Agregar en Bases'}</span>
-                </button>
-              )}
+              <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                {onAddCustomDoc && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSourceMode('custom_base');
+                      setShowQuickAddBase(!showQuickAddBase);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-mono font-bold flex items-center gap-1 transition"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>{isEn ? 'New Analysis' : 'Crear Análisis'}</span>
+                  </button>
+                )}
+                {onOpenKnowledgeTab && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenKnowledgeTab()}
+                    className="px-2.5 py-1 rounded-lg bg-[#24170f] hover:bg-amber-700 text-amber-200 hover:text-white border border-[#4d3221] text-[11px] font-mono flex items-center gap-1 transition"
+                  >
+                    <span>{isEn ? 'Bases Tab' : 'Ver Bases'}</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {sourceMode === 'custom_base' && (
-              <div className="pt-2 border-t border-[#3b271a]/80 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                <span className="text-[11px] font-mono text-amber-200/70">
-                  {isEn ? 'Selected analysis:' : 'Análisis seleccionado:'}
-                </span>
-                <select
-                  value={chosenDoc?.id || ''}
-                  onChange={(e) => setSelectedDocId(e.target.value)}
-                  className="flex-1 bg-[#100b07] border border-[#3b271a] rounded-lg px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-amber-500"
-                >
-                  {documents.map((doc) => (
-                    <option key={doc.id} value={doc.id}>
-                      {doc.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="pt-2 border-t border-[#3b271a]/80 space-y-2" onClick={(e) => e.stopPropagation()}>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <span className="text-[11px] font-mono text-amber-200/70 shrink-0">
+                    {isEn ? 'Selected analysis:' : 'Análisis seleccionado:'}
+                  </span>
+                  <select
+                    value={chosenDoc?.id || ''}
+                    onChange={(e) => setSelectedDocId(e.target.value)}
+                    className="flex-1 bg-[#100b07] border border-[#3b271a] rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-amber-500"
+                  >
+                    {documents.map((doc) => (
+                      <option key={doc.id} value={doc.id}>
+                        {doc.type === 'custom' ? `★ ${doc.name}` : doc.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {chosenDoc && (
+                  <div className="text-[10px] font-mono text-amber-300/80 bg-[#100b07] px-2.5 py-1.5 rounded-lg border border-[#3b271a]/70 line-clamp-2">
+                    {chosenDoc.description || chosenDoc.content.slice(0, 140)}
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
 
+        {/* Inline Quick-Add Base Form */}
+        {showQuickAddBase && onAddCustomDoc && (
+          <div className="p-4 rounded-xl bg-[#120c08] border border-amber-500/60 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold text-amber-300 flex items-center gap-1.5">
+                <Plus className="w-3.5 h-3.5" />
+                {isEn
+                  ? 'Add Custom Analysis / Trading Rule right here'
+                  : 'Agregar Análisis o Regla Propia aquí mismo'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowQuickAddBase(false)}
+                className="text-amber-200/60 hover:text-white p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <input
+                type="text"
+                value={quickBaseName}
+                onChange={(e) => setQuickBaseName(e.target.value)}
+                placeholder={isEn ? 'Analysis name (e.g. My NY Plan)' : 'Nombre (ej. Mi Análisis NY)'}
+                className="bg-[#18110b] border border-[#3b271a] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-amber-200/40 focus:outline-none focus:border-amber-500"
+              />
+              <input
+                type="text"
+                value={quickBaseContent}
+                onChange={(e) => setQuickBaseContent(e.target.value)}
+                placeholder={
+                  isEn
+                    ? 'Paste your analysis, bias, levels or rules...'
+                    : 'Escribe o pega tu análisis, sesgo, niveles o reglas...'
+                }
+                className="sm:col-span-2 bg-[#18110b] border border-[#3b271a] rounded-lg px-3 py-2 text-xs text-white placeholder-amber-200/40 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowQuickAddBase(false)}
+                className="px-3 py-1.5 rounded-lg bg-[#18110b] text-amber-200/70 border border-[#3b271a] text-xs font-mono"
+              >
+                {isEn ? 'Cancel' : 'Cancelar'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQuickBase}
+                disabled={!quickBaseName.trim() || !quickBaseContent.trim()}
+                className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white text-xs font-mono font-bold transition"
+              >
+                {isEn ? 'Save & Select Analysis' : 'Guardar y Usar este Análisis'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Asset, Balance, Risk & Calculate Controls */}
         <div className="pt-3 border-t border-[#3b271a] grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-semibold text-amber-200/80 mb-1.5 uppercase tracking-wider font-mono">
-              {isEn ? '1. CFD Index / Asset (12)' : '1. Índice CFD / Activo (12)'}
+              {marketMode === 'futures_only'
+                ? isEn
+                  ? `1. Futures Contract (${assets.length})`
+                  : `1. Futuro / Activo (${assets.length})`
+                : marketMode === 'cfd_only'
+                ? isEn
+                  ? `1. CFD Index / Asset (${assets.length})`
+                  : `1. Índice CFD / Activo (${assets.length})`
+                : isEn
+                ? `1. Index / Asset (${assets.length})`
+                : `1. Índice / Activo (${assets.length})`}
             </label>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-1">
-              {assets.map((item) => (
-                <button
-                  key={item.symbol}
-                  onClick={() => setSelectedAsset(item.symbol)}
-                  title={item.name}
-                  className={`px-2 py-1.5 rounded-lg font-mono text-[11px] font-bold transition border ${
-                    selectedAsset === item.symbol
-                      ? 'bg-amber-600 text-white border-amber-400 shadow-sm'
-                      : 'bg-[#120c08] text-amber-200/70 border-[#3b271a] hover:border-amber-700'
-                  }`}
-                >
-                  {item.symbol}
-                </button>
-              ))}
+              {assets.map((item) => {
+                const fut = FUTURES_CONTRACT_MAP[item.symbol];
+                return (
+                  <button
+                    key={item.symbol}
+                    type="button"
+                    onClick={() => setSelectedAsset(item.symbol)}
+                    title={item.name}
+                    className={`px-2 py-1.5 rounded-lg font-mono text-[11px] font-bold transition border ${
+                      selectedAsset === item.symbol
+                        ? 'bg-amber-600 text-white border-amber-400 shadow-sm'
+                        : 'bg-[#120c08] text-amber-200/70 border-[#3b271a] hover:border-amber-700'
+                    }`}
+                  >
+                    {marketMode === 'futures_only' && fut ? fut.futuresTicker.replace('1!', '') : item.symbol}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -463,13 +603,30 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
             <label className="block text-xs font-semibold text-amber-200/80 mb-1.5 uppercase tracking-wider font-mono">
               {isEn ? '3. Risk per Trade (%)' : '3. Riesgo por Operación (%)'}
             </label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {[0.25, 0.50, 1.00].map((r) => (
+            <div className="relative mb-1.5">
+              <input
+                type="number"
+                min={0.05}
+                max={5}
+                step="0.05"
+                value={riskPercentage || ''}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setRiskPercentage(isNaN(val) ? 0.5 : val);
+                }}
+                className="w-full bg-[#120c08] border border-[#3b271a] rounded-lg px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-500"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-400 font-mono text-xs font-bold">
+                % = ${(((accountBalance || 0) * (riskPercentage || 0)) / 100).toFixed(2)}
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+              {[0.25, 0.50, 0.75, 1.00].map((r) => (
                 <button
                   key={r}
                   type="button"
                   onClick={() => setRiskPercentage(r)}
-                  className={`px-2 py-2 rounded-lg font-mono text-xs font-bold border transition ${
+                  className={`px-1.5 py-1 rounded font-mono text-[10px] font-bold border transition ${
                     riskPercentage === r
                       ? 'bg-emerald-950 text-emerald-300 border-emerald-500'
                       : 'bg-[#120c08] text-amber-200/70 border-[#3b271a] hover:border-amber-700'
@@ -479,13 +636,41 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
                 </button>
               ))}
             </div>
-            <span className="text-[10px] text-emerald-400 mt-1.5 block font-mono">
-              {isEn ? 'Risk:' : 'Riesgo:'} ${(((accountBalance || 0) * riskPercentage) / 100).toFixed(2)} USD
-            </span>
           </div>
 
-          <div className="flex flex-col justify-end">
+          <div className="flex flex-col justify-between gap-2">
+            <div>
+              <label className="block text-xs font-semibold text-amber-200/80 mb-1.5 uppercase tracking-wider font-mono">
+                {isEn ? '4. Direction Mode' : '4. Dirección de Entrada'}
+              </label>
+              <div className="grid grid-cols-3 gap-1">
+                {[
+                  { id: 'AUTO', labelEs: 'Auto IA', labelEn: 'Auto AI' },
+                  { id: 'BUY', labelEs: 'Compra', labelEn: 'BUY' },
+                  { id: 'SELL', labelEs: 'Venta', labelEn: 'SELL' },
+                ].map((dir) => (
+                  <button
+                    key={dir.id}
+                    type="button"
+                    onClick={() => setPreferredDirection(dir.id as 'AUTO' | 'BUY' | 'SELL')}
+                    className={`py-1.5 px-2 rounded-lg font-mono text-[11px] font-bold border transition ${
+                      preferredDirection === dir.id
+                        ? dir.id === 'BUY'
+                          ? 'bg-emerald-700 text-white border-emerald-400'
+                          : dir.id === 'SELL'
+                          ? 'bg-rose-700 text-white border-rose-400'
+                          : 'bg-amber-600 text-white border-amber-400'
+                        : 'bg-[#120c08] text-amber-200/70 border-[#3b271a] hover:border-amber-700'
+                    }`}
+                  >
+                    {isEn ? dir.labelEn : dir.labelEs}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <button
+              type="button"
               onClick={handleRequestTradeSetup}
               disabled={isLoading}
               className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider font-mono flex items-center justify-center gap-2 shadow-lg transition disabled:opacity-50"
@@ -508,19 +693,78 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
           </div>
         </div>
 
-        {/* Optional Notes */}
-        <div>
-          <input
-            type="text"
-            value={userNotes}
-            onChange={(e) => setUserNotes(e.target.value)}
-            placeholder={
-              isEn
-                ? "Optional note (e.g. 'Looking for buy on 15M support' or 'Check 30M reaction')"
-                : "Nota opcional (ej. 'Busco compra en soporte de 15M' o 'Revisar reacción en 30M')"
-            }
-            className="w-full bg-[#120c08] border border-[#3b271a] rounded-lg px-3 py-2 text-xs text-white placeholder-amber-200/40 focus:outline-none focus:border-amber-500"
-          />
+        {/* Strategy Selector & Optional Notes */}
+        <div className="pt-3 border-t border-[#3b271a] grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] font-mono font-semibold text-amber-200/80 mb-1 flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+              <span>
+                {isEn ? '5. Institutional Playbook / Strategy:' : '5. Estrategia Operativa a Aplicar:'}
+              </span>
+            </label>
+            <select
+              value={selectedStrategyId}
+              onChange={(e) => setSelectedStrategyId(e.target.value)}
+              className="w-full bg-[#120c08] border border-[#3b271a] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-500"
+            >
+              <option value="AUTO">
+                {isEn
+                  ? 'Automatic (Best Strategy for Active Session & Asset)'
+                  : 'Automática (Mejor Estrategia según Horario y Activo)'}
+              </option>
+              {TRADING_STRATEGIES.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.code} — {isEn ? st.nameEn : st.nameEs} ({st.winRateEstimate})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-mono font-semibold text-amber-200/80 mb-1">
+              {isEn ? '6. Specific Instruction / Note (Optional):' : '6. Nota o Condición Específica (Opcional):'}
+            </label>
+            <input
+              type="text"
+              value={userNotes}
+              onChange={(e) => setUserNotes(e.target.value)}
+              placeholder={
+                isEn
+                  ? "e.g. 'Looking for buy on 15M support' or 'Wait 5M FVG'"
+                  : "Ej. 'Busco compra en soporte de 15M' o 'Confirmación en FVG de 5M'"
+              }
+              className="w-full bg-[#120c08] border border-[#3b271a] rounded-lg px-3 py-2 text-xs text-white placeholder-amber-200/40 focus:outline-none focus:border-amber-500"
+            />
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {(isEn
+                ? [
+                    'Buy on 15M discount FVG',
+                    'Sell after PDH sweep',
+                    '5M Silver Bullet confirmation',
+                    'Clear notes',
+                  ]
+                : [
+                    'Compra en FVG 15M descuento',
+                    'Venta tras barrido de PDH',
+                    'Confirmación Silver Bullet 5M',
+                    'Limpiar nota',
+                  ]
+              ).map((chip, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() =>
+                    setUserNotes(
+                      chip === 'Limpiar nota' || chip === 'Clear notes' ? '' : chip
+                    )
+                  }
+                  className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#120c08] hover:bg-[#24170f] text-amber-200/70 hover:text-amber-200 border border-[#3b271a]"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -608,7 +852,19 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
                 </span>
               </div>
 
+              {onSelectAssetInChart && (
+                <button
+                  type="button"
+                  onClick={() => onSelectAssetInChart(tradeSetup.asset)}
+                  className="text-xs px-3 py-2 rounded-xl bg-[#24170f] hover:bg-amber-700 text-amber-200 hover:text-white flex items-center gap-1.5 transition border border-[#4d3221] font-mono"
+                >
+                  <LineChart className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'View Chart' : 'Ver en Gráfico'}</span>
+                </button>
+              )}
+
               <button
+                type="button"
                 onClick={copySetupToClipboard}
                 className="text-xs px-3 py-2 rounded-xl bg-[#24170f] hover:bg-[#312015] text-amber-200 flex items-center gap-1.5 transition border border-[#4d3221] font-mono"
               >
@@ -749,11 +1005,23 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
             <div className="p-3 rounded-lg bg-[#120c08] border border-[#3b271a] flex items-center justify-between">
               <div>
                 <span className="text-amber-200/60 text-[10px] block">
-                  {isEn ? 'Recommended Lot Size' : 'Lotaje Recomendado'}
+                  {marketMode === 'futures_only'
+                    ? isEn
+                      ? 'Recommended Contracts'
+                      : 'Contratos Recomendados'
+                    : isEn
+                    ? 'Recommended Lot Size'
+                    : 'Lotaje Recomendado'}
                 </span>
                 <span className="text-xl font-black text-amber-400">
                   {tradeSetup.propFirmRiskCalculation.recommendedLots}{' '}
-                  {isEn ? 'Lots' : 'Lotes'}
+                  {marketMode === 'futures_only'
+                    ? isEn
+                      ? 'Contracts'
+                      : 'Contratos'
+                    : isEn
+                    ? 'Lots'
+                    : 'Lotes'}
                 </span>
                 <span className="text-[10px] text-amber-200/50 block">
                   {tradeSetup.propFirmRiskCalculation.contractSizeSpec}
@@ -796,7 +1064,7 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
             </div>
           </div>
 
-          {/* Direct Explanation & Practical Basis */}
+          {/* Direct Explanation, Execution Plan & Practical Basis */}
           <div className="p-5 space-y-4 text-xs">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
@@ -819,6 +1087,28 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
                 </p>
               </div>
             </div>
+
+            {tradeSetup.executionTips && tradeSetup.executionTips.length > 0 && (
+              <div className="p-3.5 rounded-xl bg-[#120c08] border border-[#3b271a] space-y-1.5">
+                <h5 className="font-bold text-amber-300 uppercase font-mono text-[11px] flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  {isEn ? 'Step-by-Step Execution Plan' : 'Plan de Ejecución Paso a Paso'}
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1">
+                  {tradeSetup.executionTips.map((tip, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 rounded-lg bg-[#18110b] border border-[#3b271a] flex items-start gap-2 text-amber-100/90"
+                    >
+                      <span className="px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700/60 font-mono font-bold text-[10px] shrink-0">
+                        {idx + 1}
+                      </span>
+                      <span>{tip}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Practical Basis & Sources Section */}
             <div className="pt-3 border-t border-[#3b271a] space-y-2">

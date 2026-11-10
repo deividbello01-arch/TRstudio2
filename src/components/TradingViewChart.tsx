@@ -15,7 +15,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { CandleCountdownTimer } from './CandleCountdownTimer';
-import { AppLanguage, InstrumentMarketMode, ALL_PROGRAMMED_TRADEABLE_SYMBOLS } from '../types/trading';
+import { AppLanguage, AppTheme, InstrumentMarketMode, ALL_PROGRAMMED_TRADEABLE_SYMBOLS } from '../types/trading';
 import { INSTRUMENTS, FUTURES_CONTRACT_MAP } from '../lib/instruments';
 
 interface TradingViewChartProps {
@@ -24,6 +24,7 @@ interface TradingViewChartProps {
   language?: AppLanguage;
   marketMode?: InstrumentMarketMode;
   enabledSymbols?: string[];
+  theme?: AppTheme;
 }
 
 type DrawingTool = 'cursor' | 'long' | 'short' | 'zone' | 'hline' | 'line' | 'pen' | 'text';
@@ -49,6 +50,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
   language = 'es',
   marketMode = 'all_programmed',
   enabledSymbols,
+  theme = 'cream',
 }) => {
   const isEn = language === 'en';
   const [timeframe, setTimeframe] = useState<string>('15');
@@ -134,8 +136,13 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
 
   const encodedSymbol = encodeURIComponent(activeTvSymbol);
   const tvLocale = isEn ? 'en' : 'es';
+  const isLightCream = theme === 'cream';
+  const tvTheme = isLightCream ? 'light' : 'dark';
+  const tvToolbarBg = isLightCream ? 'efeae0' : '18110b';
+  const tvPaneBg = isLightCream ? '%23ffffff' : '%23120d09';
+  const tvGridColor = isLightCream ? '%23e7e2d6' : '%23261a12';
 
-  const widgetUrl = `https://www.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=${encodedSymbol}&interval=${timeframe}&hidesidetoolbar=${isDrawMenuOpen ? '0' : '1'}&symboledit=1&saveimage=1&toolbarbg=18110b&studies=%5B%5D&theme=dark&style=1&timezone=America%2FNew_York&studies_overrides=%7B%7D&overrides=%7B%22paneProperties.background%22%3A%22%23120d09%22%2C%22paneProperties.vertGridProperties.color%22%3A%22%23261a12%22%2C%22paneProperties.horzGridProperties.color%22%3A%22%23261a12%22%2C%22mainSeriesProperties.candleStyle.upColor%22%3A%22%2310b981%22%2C%22mainSeriesProperties.candleStyle.downColor%22%3A%22%23f43f5e%22%2C%22mainSeriesProperties.candleStyle.borderUpColor%22%3A%22%2310b981%22%2C%22mainSeriesProperties.candleStyle.borderDownColor%22%3A%22%23f43f5e%22%2C%22mainSeriesProperties.candleStyle.wickUpColor%22%3A%22%2310b981%22%2C%22mainSeriesProperties.candleStyle.wickDownColor%22%3A%22%23f43f5e%22%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=${tvLocale}&utm_source=trstudio&utm_medium=widget&utm_campaign=chart`;
+  const widgetUrl = `https://www.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=${encodedSymbol}&interval=${timeframe}&hidesidetoolbar=${isDrawMenuOpen ? '0' : '1'}&symboledit=1&saveimage=1&toolbarbg=${tvToolbarBg}&studies=%5B%5D&theme=${tvTheme}&style=1&timezone=America%2FNew_York&studies_overrides=%7B%7D&overrides=%7B%22paneProperties.background%22%3A%22${tvPaneBg}%22%2C%22paneProperties.vertGridProperties.color%22%3A%22${tvGridColor}%22%2C%22paneProperties.horzGridProperties.color%22%3A%22${tvGridColor}%22%2C%22mainSeriesProperties.candleStyle.upColor%22%3A%22%2310b981%22%2C%22mainSeriesProperties.candleStyle.downColor%22%3A%22%23f43f5e%22%2C%22mainSeriesProperties.candleStyle.borderUpColor%22%3A%22%2310b981%22%2C%22mainSeriesProperties.candleStyle.borderDownColor%22%3A%22%23f43f5e%22%2C%22mainSeriesProperties.candleStyle.wickUpColor%22%3A%22%2310b981%22%2C%22mainSeriesProperties.candleStyle.wickDownColor%22%3A%22%23f43f5e%22%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=${tvLocale}&utm_source=trstudio&utm_medium=widget&utm_campaign=chart`;
 
   const timeframes = [
     { label: '1M', value: '1' },

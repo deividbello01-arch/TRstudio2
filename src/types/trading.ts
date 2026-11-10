@@ -173,7 +173,7 @@ export interface OpenPosition {
   status: 'OPEN' | 'BREAK_EVEN' | 'PARTIAL_CLOSED';
 }
 
-export type AppTheme = 'crimson' | 'mint' | 'coffee' | 'midnight' | 'emerald' | 'obsidian';
+export type AppTheme = 'cream' | 'crimson' | 'mint' | 'coffee' | 'midnight' | 'emerald' | 'obsidian';
 export type AppLanguage = 'es' | 'en';
 export type InstrumentMarketMode = 'all_programmed' | 'cfd_only' | 'futures_only';
 
@@ -234,7 +234,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
-  theme: 'coffee',
+  theme: 'cream',
   language: 'es',
   timeFormat: '12h',
   minimalistMode: false,

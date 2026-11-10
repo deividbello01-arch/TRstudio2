@@ -65,9 +65,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const themes: Array<{ id: AppTheme; nameEs: string; nameEn: string; previewClass: string }> = [
     {
+      id: 'cream',
+      nameEs: 'Blanco, Gris, Crema & Letras Negras (Principal)',
+      nameEn: 'White, Gray, Cream & Black Letters (Default)',
+      previewClass: 'bg-[#f5f2ea] border-[#18181b]',
+    },
+    {
       id: 'coffee',
-      nameEs: 'Naranja / Café Espresso (Predeterminado)',
-      nameEn: 'Orange / Coffee Espresso (Default)',
+      nameEs: 'Naranja / Café Espresso',
+      nameEn: 'Orange / Coffee Espresso',
       previewClass: 'bg-[#f59e0b] border-amber-300',
     },
     {

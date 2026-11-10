@@ -23,6 +23,7 @@ import { Activity } from 'lucide-react';
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('terminal');
   const [targetAssetForAction, setTargetAssetForAction] = useState<string>('NAS100');
+  const [targetStrategyForAction, setTargetStrategyForAction] = useState<string>('AUTO');
   const [instruments, setInstruments] = useState<InstrumentQuote[]>([]);
   const [session, setSession] = useState<KillzoneSession | null>(null);
   const [fxRates, setFxRates] = useState<FxRates>(DEFAULT_FX_RATES);
@@ -30,9 +31,18 @@ export default function App() {
 
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
-      const saved = localStorage.getItem('trstudio_settings_v3');
-      if (saved) {
-        return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(saved) };
+      const savedV4 = localStorage.getItem('trstudio_settings_v4');
+      if (savedV4) {
+        return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(savedV4) };
+      }
+      const savedV3 = localStorage.getItem('trstudio_settings_v3');
+      if (savedV3) {
+        const parsed = JSON.parse(savedV3);
+        return {
+          ...DEFAULT_APP_SETTINGS,
+          ...parsed,
+          theme: 'cream',
+        };
       }
     } catch (e) {
       console.warn('Could not load saved settings:', e);
@@ -42,7 +52,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('trstudio_settings_v3', JSON.stringify(settings));
+      localStorage.setItem('trstudio_settings_v4', JSON.stringify(settings));
     } catch (e) {
       console.warn('Could not persist settings:', e);
     }
@@ -233,8 +243,9 @@ export default function App() {
     setActiveTab('reports');
   };
 
-  const handleUseStrategyForEntry = (asset: string, _strategy: StrategyPlaybook) => {
+  const handleUseStrategyForEntry = (asset: string, strategy: StrategyPlaybook) => {
     setTargetAssetForAction(asset);
+    setTargetStrategyForAction(strategy.id);
     setActiveTab('entries');
   };
 
@@ -307,10 +318,15 @@ export default function App() {
         {activeTab === 'entries' && (
           <TradeSetupEngine
             initialAsset={targetAssetForAction}
+            initialStrategyId={targetStrategyForAction}
             session={session}
             documents={documents}
             onAddCustomDoc={handleAddCustomDoc}
             onOpenKnowledgeTab={() => setActiveTab('knowledge')}
+            onSelectAssetInChart={(symbol) => {
+              setTargetAssetForAction(symbol);
+              setActiveTab('terminal');
+            }}
             defaultBalance={settings.defaultBalance}
             defaultRisk={settings.defaultRisk}
             language={settings.language}
