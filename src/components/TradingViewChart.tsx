@@ -250,7 +250,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
 
   return (
     <div
-      className={`space-y-3 ${
+      className={`space-y-3 w-full min-w-0 max-w-full ${
         isFullscreen ? 'fixed inset-2 z-50 flex flex-col bg-[#0c0906] p-2' : ''
       }`}
     >
@@ -262,21 +262,21 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
       />
 
       <div
-        className={`bg-[#18110b] border border-[#3b271a] rounded-xl overflow-hidden shadow-2xl transition-all ${
+        className={`bg-[#18110b] border border-[#3b271a] rounded-xl overflow-hidden shadow-2xl transition-all w-full min-w-0 ${
           isFullscreen ? 'flex-1 flex flex-col' : ''
         }`}
       >
         {/* Top Control Bar */}
-        <div className="p-3 sm:px-4 bg-[#1e140d] border-b border-[#3b271a] flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-lg bg-[#2e1d13] border border-[#4d3221] text-amber-400">
+        <div className="p-2.5 sm:px-4 bg-[#1e140d] border-b border-[#3b271a] flex flex-wrap items-center justify-between gap-2 sm:gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="p-1.5 rounded-lg bg-[#2e1d13] border border-[#4d3221] text-amber-400 shrink-0">
                 <Coffee className="w-4 h-4" />
               </span>
-              <div>
-                <div className="flex items-center gap-2 font-mono">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 font-mono flex-wrap">
                   <span className="font-bold text-white text-sm">{currentSymbol}</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#332014] text-amber-300 border border-[#4d3221]">
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#332014] text-amber-300 border border-[#4d3221] truncate max-w-[140px] sm:max-w-none">
                     {activeTvSymbol}
                   </span>
                   <span className="text-[11px] text-amber-200/70 hidden sm:inline">
@@ -288,16 +288,16 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
           </div>
 
           {/* Broker Feed Selector, Draw Toggle Button & Timeframes */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full sm:w-auto min-w-0">
             {selectedConfig.alternates.length > 1 && (
-              <div className="flex items-center gap-1.5 text-xs font-mono">
+              <div className="flex items-center gap-1.5 text-xs font-mono min-w-0 max-w-full">
                 <span className="text-[10px] text-amber-400/60 uppercase hidden md:inline">
                   Feed:
                 </span>
                 <select
                   value={brokerSource}
                   onChange={(e) => setBrokerSource(e.target.value)}
-                  className="bg-[#26180f] border border-[#3d2719] rounded-lg px-2 py-1 text-xs text-amber-200 focus:outline-none focus:border-amber-500 font-mono"
+                  className="bg-[#26180f] border border-[#3d2719] rounded-lg px-2 py-1 text-xs text-amber-200 focus:outline-none focus:border-amber-500 font-mono max-w-[175px] sm:max-w-none truncate"
                 >
                   <option value="default">{selectedConfig.alternates[0].name}</option>
                   {selectedConfig.alternates.slice(1).map((alt) => (
@@ -317,7 +317,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
                 setIsDrawMenuOpen(next);
                 if (!next) setActiveTool('cursor');
               }}
-              className={`px-2.5 py-1 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 transition ${
+              className={`px-2.5 py-1 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 transition shrink-0 ${
                 isDrawMenuOpen
                   ? 'bg-amber-600 text-white border-amber-400 shadow-sm'
                   : 'bg-[#24170f] hover:bg-[#332014] text-amber-300 border-[#4d3221]'
@@ -329,7 +329,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
               }
             >
               <Pencil className="w-3.5 h-3.5" />
-              <span>{isEn ? 'Draw / Mark' : 'Dibujar / Marcar'}</span>
+              <span>{isEn ? 'Draw' : 'Dibujar'}</span>
               {currentSymbolDrawings.length > 0 && (
                 <span className="px-1.5 py-0.2 rounded bg-black/40 text-[10px]">
                   {currentSymbolDrawings.length}
@@ -338,12 +338,12 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
             </button>
 
             {/* Timeframe buttons */}
-            <div className="flex items-center bg-[#24170f] border border-[#3b271a] rounded-lg p-0.5 font-mono text-xs">
+            <div className="flex items-center bg-[#24170f] border border-[#3b271a] rounded-lg p-0.5 font-mono text-xs overflow-x-auto max-w-full">
               {timeframes.map((tf) => (
                 <button
                   key={tf.value}
                   onClick={() => setTimeframe(tf.value)}
-                  className={`px-2 py-1 rounded transition text-[11px] font-semibold ${
+                  className={`px-2 py-1 rounded transition text-[11px] font-semibold shrink-0 ${
                     timeframe === tf.value
                       ? 'bg-amber-600 text-white shadow-sm'
                       : 'text-amber-200/60 hover:text-white hover:bg-[#332014]'
@@ -356,7 +356,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
 
             <button
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className="p-1.5 rounded-lg bg-[#24170f] hover:bg-[#332014] border border-[#3b271a] text-amber-300 hover:text-white transition"
+              className="p-1.5 rounded-lg bg-[#24170f] hover:bg-[#332014] border border-[#3b271a] text-amber-300 hover:text-white transition shrink-0"
               title={
                 isFullscreen
                   ? isEn
@@ -374,7 +374,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
               href={`https://${isEn ? 'www' : 'es'}.tradingview.com/chart/?symbol=${encodedSymbol}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1.5 rounded-lg bg-[#24170f] hover:bg-[#332014] border border-[#3b271a] text-amber-300 hover:text-amber-100 transition"
+              className="p-1.5 rounded-lg bg-[#24170f] hover:bg-[#332014] border border-[#3b271a] text-amber-300 hover:text-amber-100 transition shrink-0"
               title={isEn ? 'Open in TradingView.com' : 'Abrir en TradingView.com'}
             >
               <ExternalLink className="w-3.5 h-3.5" />
@@ -383,8 +383,8 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
         </div>
 
         {/* Asset Switcher Bar */}
-        <div className="px-3 py-2 bg-[#140d08] border-b border-[#3b271a]/80 flex items-center gap-1.5 overflow-x-auto text-xs font-mono">
-          <span className="text-[11px] text-amber-500/60 uppercase mr-1">
+        <div className="px-3 py-2 bg-[#140d08] border-b border-[#3b271a]/80 flex items-center gap-1.5 w-full min-w-0 overflow-x-auto touch-pan-x text-xs font-mono">
+          <span className="text-[11px] text-amber-500/60 uppercase mr-1 shrink-0">
             {isEn ? 'Assets:' : 'Activos:'}
           </span>
           {Object.keys(symbolMap).map((sym) => {
@@ -396,7 +396,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
                   setBrokerSource('default');
                   onSymbolChange?.(sym);
                 }}
-                className={`px-2.5 py-1 rounded-md transition font-semibold whitespace-nowrap ${
+                className={`px-2.5 py-1 rounded-md transition font-semibold whitespace-nowrap shrink-0 ${
                   isSelected
                     ? 'bg-amber-700 text-white border border-amber-500 shadow-sm'
                     : 'bg-[#1e130c] text-amber-200/70 hover:text-amber-100 border border-[#332014] hover:border-amber-800'

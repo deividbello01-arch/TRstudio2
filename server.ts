@@ -938,7 +938,7 @@ app.post('/api/scan-best-setups', async (req, res) => {
   });
 });
 
-// 4. Interactive Gemini Chat for News & Macro Doubts
+// 4. Interactive Gemini Chat (Neutral General AI + News & Macro Support)
 app.post('/api/chat', async (req, res) => {
   const {
     message,
@@ -958,41 +958,53 @@ app.post('/api/chat', async (req, res) => {
 
   const ownDeclaration = buildOwnAnalysisDeclaration(asset, currentKz, 0.50, true, isEn ? 'en' : 'es');
 
+  const qLower = String(message).toLowerCase();
+  const isNewsOrMarketQuestion =
+    /cpi|ipc|inflac|nfp|empleo|nomina|fomc|powell|fed|bce|ecb|boj|boe|tasa|rate|bono|yield|us10y|dxy|vix|notici|news|macro|oro|gold|xau|nas100|nasdaq|us30|dow|us500|s&p|sp500|us2000|russell|ger40|dax|uk100|ftse|eu50|fra40|jp225|nikkei|hk50|eurusd|mercado|market|trading|entrada|lote|pip|fvg|liquidez|sesion|killzone/.test(
+      qLower
+    );
+
   try {
     const recentHistoryText = Array.isArray(history)
       ? history
           .slice(-4)
-          .map((h: any) => `${h.role === 'user' ? 'User' : 'Analyst'}: ${h.content}`)
+          .map((h: any) => `${h.role === 'user' ? 'User' : 'Gemini'}: ${h.content}`)
           .join('\n')
       : '';
 
     const systemPrompt = isEn
-      ? `You are the TRstudio Gemini News & Macro Analyst.
+      ? `You are Gemini, a neutral, helpful, and versatile general-purpose AI assistant.
+- If the user asks any general question (concepts, math, writing, summaries, technology, productivity, or everyday topics), answer naturally, clearly, and neutrally like a standard general AI assistant without forcing trading jargon.
+- If the user asks about economic news (CPI inflation, NFP jobs report, FOMC, Federal Reserve/ECB/BoE/BoJ interest rates, Jerome Powell speeches, US10Y Treasury yields, DXY Dollar Index, VIX, geopolitical events) or financial markets, use the live context below to give a clear, practical explanation of how it affects ${asset} and global markets.
+
+LIVE CONTEXT (use when relevant to news/markets):
 Current New York Time: ${currentKz.nyTime} | Active Session: ${currentKz.name}.
 LIVE MARKET QUOTES: ${liveSnapshot}
-${customDocument ? `REFERENCE CONTEXT:\n${customDocument.substring(0, 3500)}` : ''}
+${customDocument ? `REFERENCE CONTEXT:\n${customDocument.substring(0, 2500)}` : ''}
+Respond in English concisely and clearly.`
+      : `Eres Gemini, una inteligencia artificial de propósito general, neutral, versátil y directa.
+- Si el usuario te hace cualquier pregunta general (dudas cotidianas, explicaciones, cálculos, redacción, resúmenes, programación, cultura general o cualquier tema), responde con total naturalidad y neutralidad como una IA general cualquiera, sin forzar temas de trading si no vienen al caso.
+- Si el usuario te pregunta sobre noticias económicas (CPI/Inflación, NFP/Empleo, FOMC, tasas de la Fed/BCE/BoE/BoJ, discursos de Jerome Powell, rendimientos de bonos US10Y, DXY, VIX, eventos geopolíticos, calendario económico) o sobre mercados financieros, utiliza el contexto en tiempo real de abajo para explicarle con claridad cómo funciona y cómo impacta a ${asset} y a los mercados.
 
-Your role is to clearly and directly answer user doubts about macroeconomic news (CPI inflation, NFP jobs report, FOMC, Federal Reserve/ECB/BoE/BoJ interest rates, Jerome Powell speeches, US10Y Treasury yields, DXY Dollar Index, VIX volatility, geopolitical events, red-folder economic calendar releases) and explain how they impact ${asset} (and global CFD indices NAS100, US500, US30, US2000, GER40, UK100, EU50, JP225, XAUUSD Gold, EURUSD) and when to trade or wait.
-Respond in English concisely, practically, and without unnecessary filler.`
-      : `Eres el Analista Gemini de Noticias y Macroeconomía de TRstudio.
+CONTEXTO EN TIEMPO REAL (úsalo cuando pregunten sobre noticias o mercados):
 Hora actual en Nueva York: ${currentKz.nyTime} | Sesión activa: ${currentKz.name}.
 COTIZACIONES EN VIVO: ${liveSnapshot}
-${customDocument ? `CONTEXTO DE REFERENCIA:\n${customDocument.substring(0, 3500)}` : ''}
-
-Tu función es resolver de forma directa, práctica y clara cualquier duda del usuario sobre noticias macroeconómicas (CPI/Inflación, NFP/Nóminas no agrícolas, FOMC, tasas de la Fed/BCE/BoE/BoJ, discursos de Jerome Powell, rendimientos de bonos US10Y, Índice Dólar DXY, volatilidad VIX, eventos geopolíticos y calendario económico de carpeta roja) explicando cómo afectan a ${asset} (y a los índices CFD NAS100, US500, US30, US2000, GER40, UK100, EU50, JP225, XAUUSD Oro, EURUSD) y qué precauciones tomar al operar.
-Responde en español de forma directa y estructurada.`;
+${customDocument ? `CONTEXTO DE REFERENCIA:\n${customDocument.substring(0, 2500)}` : ''}
+Responde en español de forma clara, natural y bien estructurada.`;
 
     const promptWithContext = recentHistoryText
       ? `${recentHistoryText}\nUser: ${message}`
       : message;
 
     const response = await generateAiContentWithConnectedKey({
-      model: 'gemini-3.8-flash',
+      model: 'gemini-3-flash-preview',
       contents: [{ role: 'user', parts: [{ text: promptWithContext }] }],
       config: { systemInstruction: systemPrompt },
     });
 
-    const externalSources = buildExternalTraceabilitySources(asset, response);
+    const externalSources = isNewsOrMarketQuestion
+      ? buildExternalTraceabilitySources(asset, response)
+      : [];
     const reply = response.text || '';
     if (!reply) throw new Error('Empty response');
 
@@ -1006,88 +1018,67 @@ Responde en español de forma directa y estructurada.`;
       source: useOnlineOnly ? 'online-only' : 'gemini',
     });
   } catch (_err: any) {
-    const externalSources = buildExternalTraceabilitySources(asset);
-    const qLower = String(message).toLowerCase();
+    const externalSources = isNewsOrMarketQuestion ? buildExternalTraceabilitySources(asset) : [];
     const targetInst = MARKET_INSTRUMENTS.find((i) => i.symbol === asset) || MARKET_INSTRUMENTS[0];
     const xau = MARKET_INSTRUMENTS.find((i) => i.symbol === 'XAUUSD')!;
     const dxy = MARKET_INSTRUMENTS.find((i) => i.symbol === 'DXY')!;
     const us10y = MARKET_INSTRUMENTS.find((i) => i.symbol === 'US10Y')!;
     const vix = MARKET_INSTRUMENTS.find((i) => i.symbol === 'VIX')!;
 
-    let newsFallbackReply = '';
+    let fallbackReply = '';
 
     if (qLower.includes('cpi') || qLower.includes('inflac') || qLower.includes('ipc')) {
-      newsFallbackReply = isEn
+      fallbackReply = isEn
         ? `### Impact of CPI (Inflation) on ${asset}, Gold & Indices (${currentKz.nyTime} NY)
 - **Higher-than-expected CPI (Hot Inflation):** Means the Federal Reserve is likely to keep interest rates higher for longer.
-  - **DXY (${dxy.price}) & US10Y (${us10y.price}%):** Spike upward immediately.
-  - **XAUUSD Gold ($${xau.price.toLocaleString()}) & Equity Indices (${targetInst.symbol}: ${targetInst.price.toLocaleString()}):** Experience strong initial selling pressure due to higher real yields and discount rates.
-- **Lower-than-expected CPI (Cool Inflation):** Increases expectations of Fed rate cuts.
+  - **DXY (${dxy.price}) & US10Y (${us10y.price}%):** Move upward immediately.
+  - **XAUUSD Gold ($${xau.price.toLocaleString()}) & Equity Indices (${targetInst.symbol}: ${targetInst.price.toLocaleString()}):** Experience initial selling pressure due to higher yields.
+- **Lower-than-expected CPI (Cool Inflation):** Increases expectations of rate cuts.
   - **DXY & US10Y:** Drop sharply.
-  - **NAS100, US500, US30, GER40, EURUSD & XAUUSD:** Rally strongly upward after the initial 8:30 AM NY volatility sweep.
-- **Execution Rule:** Wait 15 minutes after the 8:30 AM NY release so the initial manipulation wick (*Judas Swing*) completes before entering on a 5M/15M FVG.`
-        : `### Impacto del CPI (Inflación) en ${asset}, Oro e Índices CFD (${currentKz.nyTime} NY)
-- **Si el CPI sale MÁS ALTO de lo esperado (Inflación Caliente):** La Reserva Federal (Fed) mantendrá las tasas altas por más tiempo.
-  - **DXY (${dxy.price}) y Bono US10Y (${us10y.price}%):** Suben con fuerza de inmediato.
-  - **XAUUSD Oro ($${xau.price.toLocaleString()}) e Índices (${targetInst.symbol}: ${targetInst.price.toLocaleString()}):** Sufren presión bajista inmediata porque suben los rendimientos reales de los bonos y la tasa de descuento.
-- **Si el CPI sale MÁS BAJO de lo esperado (Inflación Moderándose):** Aumenta la probabilidad de recortes de tasas de la Fed.
-  - **DXY y US10Y:** Caen con fuerza.
-  - **NAS100, US500, US30, US2000, GER40, EURUSD y XAUUSD:** Reaccionan al alza buscando liquidez de máximos previos.
-- **Regla Operativa:** El CPI se publica a las **8:30 AM (Hora NY)**. Espera de 10 a 15 minutos tras el dato para que termine el barrido de liquidez inicial antes de tomar entrada en 5M/15M.`;
+  - **NAS100, US500, US30, GER40, EURUSD & XAUUSD:** Tend to rally upward after the initial 8:30 AM NY volatility.`
+        : `### Impacto del CPI (Inflación) en ${asset}, Oro e Índices (${currentKz.nyTime} NY)
+- **Si el CPI sale MÁS ALTO de lo esperado (Inflación alta):** El banco central (Fed) tiende a mantener tasas altas por más tiempo.
+  - **DXY (${dxy.price}) y Bono US10Y (${us10y.price}%):** Suben con fuerza.
+  - **XAUUSD Oro ($${xau.price.toLocaleString()}) e Índices (${targetInst.symbol}: ${targetInst.price.toLocaleString()}):** Suelen enfrentar presión bajista inicial porque suben los rendimientos de los bonos.
+- **Si el CPI sale MÁS BAJO de lo esperado (Inflación moderándose):** Aumenta la probabilidad de recortes de tasas.
+  - **DXY y US10Y:** Caen con rapidez.
+  - **NAS100, US500, US30, GER40, EURUSD y XAUUSD:** Suelen reaccionar al alza tras la volatilidad inicial de las 8:30 AM (Hora NY).`;
     } else if (
       qLower.includes('nfp') ||
       qLower.includes('empleo') ||
       qLower.includes('nomina') ||
       qLower.includes('fomc') ||
       qLower.includes('powell') ||
-      qLower.includes('fed')
+      qLower.includes('fed') ||
+      qLower.includes('tasa') ||
+      qLower.includes('rate')
     ) {
-      newsFallbackReply = isEn
-        ? `### Trading Protocol for NFP, FOMC & Powell Speeches (${currentKz.nyTime} NY)
-- **NFP (Non-Farm Payrolls — 8:30 AM NY, First Friday of Month):**
-  - Strong job numbers + higher wages = Bullish **DXY (${dxy.price})** / Bearish **XAUUSD ($${xau.price.toLocaleString()}) & EURUSD**.
-  - Weak job numbers = Bearish **DXY** / Bullish **Gold, NAS100 & US500** (rate-cut expectations).
-- **FOMC & Powell Press Conference (2:00 PM & 2:30 PM NY):**
-  - The 2:00 PM rate statement creates the first fakeout wick; the real directional move frequently starts at **2:30 PM NY** when Jerome Powell answers the first question.
-- **Account Protection Rule:** Close or protect open positions at Break Even 15 minutes before the release, and reduce risk by 50% (e.g., 0.25% instead of 0.50%) due to spread widening.`
-        : `### Protocolo Operativo para NFP, FOMC y Discursos de Powell (${currentKz.nyTime} NY)
-- **NFP (Nóminas No Agrícolas — 8:30 AM NY, primer viernes del mes):**
-  - Empleo más fuerte de lo previsto = Impulso alcista en **DXY (${dxy.price})** y caída inicial en **XAUUSD ($${xau.price.toLocaleString()}) y EURUSD**.
-  - Empleo débil = Caída en **DXY y US10Y (${us10y.price}%)** e impulso alcista en **Oro, NAS100 y US500**.
-- **FOMC y Rueda de Prensa de Powell (2:00 PM y 2:30 PM NY):**
-  - El comunicado de las **2:00 PM NY** suele provocar un barrido en falso en ambas direcciones; la tendencia real suele definirse a las **2:30 PM NY** cuando Powell inicia la ronda de preguntas.
-- **Protección de Cuenta:** Protege en Break Even o cierra parciales 15 minutos antes de la noticia y espera a que los spreads se normalicen antes de entrar.`;
+      fallbackReply = isEn
+        ? `### Central Bank Rates, NFP & FOMC Overview (${currentKz.nyTime} NY)
+- **How Interest Rates Work:** Central banks (like the Federal Reserve) raise interest rates to cool down inflation by making credit more expensive, and lower rates to stimulate economic growth.
+- **NFP (Non-Farm Payrolls — 8:30 AM NY):** Strong job creation strengthens the USD (**DXY: ${dxy.price}**), while weak job data supports rate-cut expectations, boosting **Gold ($${xau.price.toLocaleString()})** and equity indices (**${targetInst.symbol}: ${targetInst.price.toLocaleString()}**).
+- **FOMC & Powell Speeches (2:00 PM & 2:30 PM NY):** High volatility windows where spreads widen; waiting 10–15 minutes after the announcement helps avoid false spikes.`
+        : `### Tasas de Interés, NFP y FOMC (${currentKz.nyTime} NY)
+- **Cómo funcionan las tasas de interés:** Los bancos centrales (como la Reserva Federal o el BCE) suben las tasas para frenar la inflación encareciendo el crédito, y las bajan para estimular el crecimiento económico.
+- **NFP (Nóminas No Agrícolas — 8:30 AM NY):** Un empleo muy fuerte impulsa al dólar (**DXY: ${dxy.price}**), mientras que un empleo débil aumenta la expectativa de recortes de tasas, favoreciendo al **Oro ($${xau.price.toLocaleString()})** y a los índices (**${targetInst.symbol}: ${targetInst.price.toLocaleString()}**).
+- **FOMC y Rueda de Prensa de Powell (2:00 PM y 2:30 PM NY):** Son momentos de alta volatilidad; esperar 10 a 15 minutos tras el anuncio ayuda a evitar barridos bruscos.`;
+    } else if (isNewsOrMarketQuestion) {
+      fallbackReply = isEn
+        ? `### Market & News Context (${currentKz.nyTime} NY)
+- **Your question:** *"${message}"*
+- **Current Live Reference:**
+  - **${targetInst.symbol} (${targetInst.name}):** **${targetInst.price.toLocaleString()}** (${targetInst.change24h}) | 24h Range: **${targetInst.low24h.toLocaleString()} – ${targetInst.high24h.toLocaleString()}**
+  - **Macro Indicators:** **DXY:** ${dxy.price} (${dxy.change24h}) | **US10Y Yield:** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h}) | **Gold (XAUUSD):** $${xau.price.toLocaleString()}`
+        : `### Contexto de Noticias y Mercado (${currentKz.nyTime} NY)
+- **Tu consulta:** *"${message}"*
+- **Referencia en Tiempo Real:**
+  - **${targetInst.symbol} (${targetInst.name}):** **${targetInst.price.toLocaleString()}** (${targetInst.change24h}) | Rango 24h: **${targetInst.low24h.toLocaleString()} – ${targetInst.high24h.toLocaleString()}**
+  - **Indicadores Macro:** **DXY:** ${dxy.price} (${dxy.change24h}) | **Bono US10Y:** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h}) | **Oro (XAUUSD):** $${xau.price.toLocaleString()}`;
     } else {
-      const setupPreview = buildDeterministicSetupForInstrument({
-        asset: targetInst.symbol,
-        accountBalance: 10000,
-        riskPercentage: 0.5,
-        currentKz,
-        language,
-      });
-
-      newsFallbackReply = isEn
-        ? `### Live Macro & Technical Synthesis for ${targetInst.symbol} (${currentKz.nyTime} NY)
-- **Question Analyzed:** *"${message}"*
-- **Live Market Context:**
-  - **${targetInst.symbol} (${targetInst.name}):** **${targetInst.price.toLocaleString()}** (${targetInst.change24h}) | 24h Range: **${targetInst.low24h.toLocaleString()} – ${targetInst.high24h.toLocaleString()}** | ATR: **${targetInst.atr14}**
-  - **Macro Drivers:** **DXY:** ${dxy.price} (${dxy.change24h}) | **US10Y Yield:** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h})
-- **Tactical Reference Coordinates (${setupPreview.action} — ${setupPreview.winProbability}% Win Prob.):**
-  - **Entry Zone:** **${setupPreview.prices.entryPrice}** | **Stop Loss:** **${setupPreview.prices.stopLoss}** (${setupPreview.prices.stopLossDistance})
-  - **TP1 (1:1.8):** **${setupPreview.prices.takeProfit1}** | **TP2 (1:3.0):** **${setupPreview.prices.takeProfit2}**`
-        : `### Síntesis Macro y Técnica en Vivo para ${targetInst.symbol} (${currentKz.nyTime} NY)
-- **Consulta Analizada:** *"${message}"*
-- **Contexto de Mercado en Tiempo Real:**
-  - **${targetInst.symbol} (${targetInst.name}):** **${targetInst.price.toLocaleString()}** (${targetInst.change24h}) | Rango 24h: **${targetInst.low24h.toLocaleString()} – ${targetInst.high24h.toLocaleString()}** | ATR: **${targetInst.atr14}**
-  - **Variables Macro:** **DXY:** ${dxy.price} (${dxy.change24h}) | **Bono US10Y:** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h})
-- **Coordenadas Tácticas de Referencia (${setupPreview.action} — ${setupPreview.winProbability}% Prob. Acierto):**
-  - **Zona de Entrada:** **${setupPreview.prices.entryPrice}** | **Stop Loss:** **${setupPreview.prices.stopLoss}** (${setupPreview.prices.stopLossDistance})
-  - **TP1 (1:1.8):** **${setupPreview.prices.takeProfit1}** | **TP2 (1:3.0):** **${setupPreview.prices.takeProfit2}**`;
+      fallbackReply = isEn
+        ? `Hello! Regarding your message (*"${message}"*): I am **Gemini**, your general-purpose AI assistant. You can ask me general questions, calculations, summaries, concepts, or specific questions about economic news (CPI, NFP, FOMC, interest rates) and how they impact the markets.`
+        : `¡Hola! Respecto a tu consulta (*"${message}"*): soy **Gemini**, tu asistente de inteligencia artificial de propósito general. Puedes pedirme explicaciones de cualquier tema, cálculos, resúmenes, ideas o preguntarme dudas sobre noticias económicas (CPI, NFP, FOMC, tasas de interés) y mercados.`;
     }
-
-    const fallbackReply =
-      newsFallbackReply +
-      formatAuditAttributionMarkdown(asset, currentKz, externalSources, ownDeclaration, isEn ? 'en' : 'es');
 
     return res.json({
       reply: fallbackReply,

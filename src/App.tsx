@@ -18,7 +18,7 @@ import {
 } from './types/trading';
 import { DEFAULT_KNOWLEDGE_DOCUMENTS, StrategyPlaybook } from './lib/strategiesData';
 import { getSpec } from './lib/instruments';
-import { Activity, Newspaper, Sparkles, Radar } from 'lucide-react';
+import { Activity } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('terminal');
@@ -252,7 +252,7 @@ export default function App() {
   return (
     <div
       data-theme={settings.theme}
-      className="min-h-screen bg-[#0c0906] text-[#f5ede6] flex flex-col font-sans selection:bg-amber-600 selection:text-white transition-colors duration-300"
+      className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#0c0906] text-[#f5ede6] flex flex-col font-sans selection:bg-amber-600 selection:text-white transition-colors duration-300"
     >
       <Navbar
         activeTab={activeTab}
@@ -265,8 +265,8 @@ export default function App() {
       />
 
       <main
-        className={`flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 ${
-          settings.compactCards ? 'py-3' : 'py-6'
+        className={`flex-1 max-w-7xl w-full min-w-0 mx-auto px-3 sm:px-6 overflow-x-hidden ${
+          settings.compactCards ? 'py-3' : 'py-4 sm:py-6'
         }`}
       >
         {activeTab === 'terminal' && (
@@ -351,48 +351,14 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'calculator' && <PropFirmCalculator language={settings.language} />}
+        {activeTab === 'calculator' && (
+          <PropFirmCalculator
+            language={settings.language}
+            defaultBalance={settings.defaultBalance}
+            defaultRisk={settings.defaultRisk}
+          />
+        )}
       </main>
-
-      {/* Quick Floating Action Buttons */}
-      <div className="fixed bottom-5 right-5 z-30 flex flex-col sm:flex-row items-end sm:items-center gap-2">
-        {activeTab !== 'scanner' && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('scanner')}
-            className="px-4 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs shadow-2xl border border-emerald-300/60 flex items-center gap-2 transition-transform hover:scale-105"
-            title={
-              settings.language === 'en'
-                ? 'Open Multi-Index Best Setup Scanner'
-                : 'Escáner de Mejor Entrada Multi-Índice (#1 Mayor Acierto)'
-            }
-          >
-            <Radar className="w-4 h-4" />
-            <span>
-              {settings.language === 'en' ? 'Best Trade Scanner' : 'Mejor Entrada (#1 Acierto)'}
-            </span>
-          </button>
-        )}
-
-        {activeTab !== 'newschat' && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('newschat')}
-            className="px-4 py-2.5 rounded-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs shadow-2xl border border-amber-300/60 flex items-center gap-2 transition-transform hover:scale-105"
-            title={
-              settings.language === 'en'
-                ? 'Open Gemini Chat to resolve doubts about news'
-                : 'Abrir Chat Gemini para resolver dudas sobre noticias'
-            }
-          >
-            <Newspaper className="w-4 h-4" />
-            <span>
-              {settings.language === 'en' ? 'Gemini News Chat' : 'Dudas de Noticias (Gemini)'}
-            </span>
-            <Sparkles className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
 
       {settings.showFooter && (
         <footer className="border-t border-[#3b271a] bg-[#120d09]/90 py-5 mt-12 text-xs font-mono text-amber-200/50">

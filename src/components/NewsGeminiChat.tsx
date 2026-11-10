@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Newspaper,
   Send,
   Sparkles,
   RefreshCw,
@@ -44,8 +43,8 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
       id: 'welcome-msg',
       role: 'assistant',
       content: isEn
-        ? 'Hello! I am the **TRstudio Gemini News & Macro Analyst**. Ask me any question about economic news (CPI, NFP, FOMC, Fed Interest Rates, Powell speeches, US10Y Treasury yields, DXY, or geopolitical events) and how they affect **NAS100, US30, XAUUSD (Gold), or EURUSD** right now.'
-        : '¡Hola! Soy el **Analista Gemini de Noticias y Macro de TRstudio**. Pregúntame cualquier duda sobre noticias económicas (CPI/Inflación, NFP/Empleo, FOMC, Tasas de la Fed, discursos de Powell, Bonos US10Y, DXY o eventos geopolíticos) y cómo afectan tus operaciones en **NAS100, US30, XAUUSD (Oro) o EURUSD**.',
+        ? 'Hello! I am **Gemini**, a general-purpose AI assistant. You can ask me anything you need (general questions, explanations, calculations, summaries, or ideas), and if you ask about economic news (CPI, NFP, FOMC, interest rates, yields) or markets, I also have live context to answer.'
+        : '¡Hola! Soy **Gemini**, una inteligencia artificial de propósito general. Puedes preguntarme cualquier tema, duda general, cálculo, resumen o explicación; y si me preguntas sobre noticias económicas (CPI, NFP, FOMC, tasas de interés) o mercados, también cuento con contexto en tiempo real para responderte.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -58,18 +57,16 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
 
   const quickQuestions = isEn
     ? [
-        `How do today's macro news & US10Y yields impact ${selectedAsset}?`,
-        'What happens to Gold (XAUUSD) and NAS100 when CPI inflation comes out higher than expected?',
-        'How should I trade or protect my account during NFP or FOMC Powell speeches?',
-        'Why is DXY moving right now and how does it affect EURUSD and Gold?',
-        'What are the high-impact red-folder news hours (NY time) when I should avoid entering?',
+        `How do today's news & macro data affect ${selectedAsset}?`,
+        'What happens to Gold and indices when CPI inflation comes out higher than expected?',
+        'Explain in simple terms how central bank interest rates work.',
+        'Help me calculate compound growth or organize a study/work plan.',
       ]
     : [
-        `¿Cómo afectan las noticias macro de hoy y el bono US10Y a ${selectedAsset}?`,
-        '¿Qué pasa con el Oro (XAUUSD) y el NAS100 cuando el CPI (Inflación) sale más alto de lo esperado?',
-        '¿Cómo debo operar o proteger mi cuenta durante el NFP o cuando habla Powell (FOMC)?',
-        '¿Por qué se mueve el DXY ahora mismo y cómo impacta al EURUSD y al Oro?',
-        '¿Cuáles son los horarios de noticias de carpeta roja (Hora NY) donde debo evitar abrir entradas?',
+        `¿Cómo afectan las noticias de hoy a ${selectedAsset}?`,
+        '¿Qué pasa con el Oro y los índices cuando el CPI (Inflación) sale alto?',
+        'Explícame de forma sencilla cómo funcionan las tasas de interés de los bancos centrales.',
+        'Ayúdame a hacer un cálculo rápido, resumir un tema o resolver cualquier duda general.',
       ];
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -107,7 +104,7 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
       });
 
       if (!res.ok) {
-        throw new Error(isEn ? 'Error querying Gemini news chat' : 'Error al consultar el chat de noticias');
+        throw new Error(isEn ? 'Error querying Gemini' : 'Error al consultar Gemini');
       }
 
       const data = await res.json();
@@ -144,8 +141,8 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
         id: `welcome-${Date.now()}`,
         role: 'assistant',
         content: isEn
-          ? 'Chat cleared. Ask me any question about macroeconomic news, central banks, or how an event impacts your trading.'
-          : 'Chat reiniciado. Pregúntame cualquier duda sobre noticias macroeconómicas, bancos centrales o cómo afecta un evento a tu operativa.',
+          ? 'Conversation cleared. How can I help you today? Ask me any general question or about news and markets.'
+          : 'Conversación reiniciada. ¿En qué te puedo ayudar hoy? Pregúntame cualquier duda general o sobre noticias y mercados.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
@@ -173,7 +170,7 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
         return (
           <div key={i} className="flex items-start gap-2 pl-1.5 my-0.5">
             <span className="text-amber-400 font-bold">•</span>
-            <span>{trimmed.replace(/^[-*]\s+/, '').replace(/\*\*/g, '')}</span>
+            <span className="break-words min-w-0">{trimmed.replace(/^[-*]\s+/, '').replace(/\*\*/g, '')}</span>
           </div>
         );
       }
@@ -181,7 +178,7 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
         return <hr key={i} className="border-[#3b271a] my-2" />;
       }
       return (
-        <p key={i} className="my-0.5 leading-relaxed">
+        <p key={i} className="my-0.5 leading-relaxed break-words">
           {trimmed.replace(/\*\*/g, '')}
         </p>
       );
@@ -189,45 +186,43 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full min-w-0 max-w-full overflow-x-hidden">
       {/* Header Banner */}
-      <div className="bg-[#18110b] border border-[#3b271a] rounded-xl p-4 sm:p-5 shadow-xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-950/80 text-amber-400 border border-amber-700/60">
-              <Newspaper className="w-5 h-5" />
+      <div className="bg-[#18110b] border border-[#3b271a] rounded-xl p-3.5 sm:p-5 shadow-xl w-full min-w-0">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-start sm:items-center gap-3 min-w-0">
+            <div className="p-2.5 rounded-xl bg-amber-950/80 text-amber-400 border border-amber-700/60 shrink-0">
+              <Sparkles className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-white font-mono">
-                  {isEn
-                    ? 'Gemini Chat — News & Macro Doubts'
-                    : 'Chat Gemini — Dudas sobre Noticias y Macro'}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-base font-bold text-white font-mono">
+                  {isEn ? 'Gemini AI Assistant' : 'Asistente IA Gemini'}
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-700/60 flex items-center gap-1">
                   <Sparkles className="w-3 h-3" />
-                  Gemini
+                  {isEn ? 'Neutral AI + News' : 'IA Neutral + Noticias'}
                 </span>
               </div>
               <p className="text-xs text-amber-200/60 mt-0.5">
                 {isEn
-                  ? 'Ask about CPI, NFP, FOMC, Fed rates, US10Y yields, or breaking financial news and their impact on your trades.'
-                  : 'Resuelve dudas sobre CPI, NFP, FOMC, tasas de la Fed, bonos US10Y o noticias de última hora y cómo afectan tus entradas.'}
+                  ? 'General-purpose AI assistant. Ask anything or consult about macroeconomic news and market impact.'
+                  : 'Asistente de IA neutral para cualquier consulta general, y preparado para responder si preguntas sobre noticias o mercados.'}
               </p>
             </div>
           </div>
 
           {/* Asset Focus & Clear Button */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-mono text-amber-200/70">
-              {isEn ? 'Asset Focus:' : 'Activo:'}
+          <div className="flex items-center gap-1.5 w-full md:w-auto min-w-0 overflow-x-auto touch-pan-x pb-1 md:pb-0">
+            <span className="text-[11px] font-mono text-amber-200/70 shrink-0">
+              {isEn ? 'Ref:' : 'Ref:'}
             </span>
             {TRADEABLE_INSTRUMENTS.map((inst) => (
               <button
                 key={inst.symbol}
                 type="button"
                 onClick={() => setSelectedAsset(inst.symbol)}
-                className={`px-2 py-1 rounded-lg text-[11px] font-mono font-bold border transition ${
+                className={`px-2 py-1 rounded-lg text-[11px] font-mono font-bold border transition shrink-0 ${
                   selectedAsset === inst.symbol
                     ? 'bg-amber-600 text-white border-amber-400'
                     : 'bg-[#120c08] text-amber-200/70 border-[#3b271a] hover:border-amber-600'
@@ -240,7 +235,7 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
             <button
               type="button"
               onClick={handleClearChat}
-              className="p-1.5 rounded-lg bg-[#24170f] hover:bg-rose-950/80 text-amber-200 hover:text-rose-200 border border-[#4d3221] transition ml-1"
+              className="p-1.5 rounded-lg bg-[#24170f] hover:bg-rose-950/80 text-amber-200 hover:text-rose-200 border border-[#4d3221] transition ml-1 shrink-0"
               title={isEn ? 'Clear chat' : 'Limpiar conversación'}
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -248,14 +243,14 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
           </div>
         </div>
 
-        {/* Quick News Question Chips */}
-        <div className="mt-4 pt-3 border-t border-[#3b271a]">
+        {/* Quick Question Chips */}
+        <div className="mt-3.5 pt-3 border-t border-[#3b271a]">
           <div className="text-[10px] font-mono uppercase text-amber-300/70 mb-2 flex items-center gap-1.5">
-            <Globe className="w-3 h-3 text-amber-400" />
+            <Globe className="w-3 h-3 text-amber-400 shrink-0" />
             <span>
               {isEn
-                ? 'Quick Questions about News & Market Impact:'
-                : 'Preguntas Rápidas sobre Noticias e Impacto en el Mercado:'}
+                ? 'Quick Suggestions (General & News):'
+                : 'Sugerencias Rápidas (General y Noticias):'}
             </span>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -265,7 +260,7 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
                 type="button"
                 onClick={() => handleSendMessage(q)}
                 disabled={isLoading}
-                className="text-left text-[11px] px-2.5 py-1.5 rounded-lg bg-[#120c08] hover:bg-[#24170f] text-amber-200/90 hover:text-white border border-[#3b271a] hover:border-amber-500/60 transition font-mono disabled:opacity-50"
+                className="text-left text-[11px] px-2.5 py-1.5 rounded-lg bg-[#120c08] hover:bg-[#24170f] text-amber-200/90 hover:text-white border border-[#3b271a] hover:border-amber-500/60 transition font-mono disabled:opacity-50 break-words max-w-full"
               >
                 {q}
               </button>
@@ -275,19 +270,17 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
       </div>
 
       {/* Chat Messages Container */}
-      <div className="bg-[#18110b] border border-[#3b271a] rounded-xl overflow-hidden shadow-2xl flex flex-col h-[520px]">
+      <div className="bg-[#18110b] border border-[#3b271a] rounded-xl overflow-hidden shadow-2xl flex flex-col h-[460px] sm:h-[520px] w-full min-w-0">
         {/* Top Status Bar inside Chat */}
-        <div className="px-4 py-2.5 bg-[#120c08] border-b border-[#3b271a] flex items-center justify-between text-xs font-mono">
+        <div className="px-3.5 sm:px-4 py-2.5 bg-[#120c08] border-b border-[#3b271a] flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
           <div className="flex items-center gap-2 text-amber-300">
-            <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-            <span className="font-bold">
-              {isEn ? `News & Macro Feed (${selectedAsset})` : `Consultor de Noticias Macro (${selectedAsset})`}
-            </span>
+            <MessageSquare className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="font-bold">Gemini AI</span>
           </div>
           {session && (
-            <div className="flex items-center gap-2 text-[11px] text-amber-200/70">
-              <Clock className="w-3 h-3 text-amber-400" />
-              <span>
+            <div className="flex items-center gap-1.5 text-[11px] text-amber-200/70">
+              <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+              <span className="truncate">
                 {session.name} ({session.nyTime} NY)
               </span>
             </div>
@@ -295,16 +288,16 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
         </div>
 
         {/* Messages Scroll Area */}
-        <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-[#0f0a07]/60">
+        <div className="flex-1 p-3 sm:p-4 overflow-y-auto space-y-4 bg-[#0f0a07]/60 min-w-0">
           {messages.map((msg) => {
             const isUser = msg.role === 'user';
             return (
               <div
                 key={msg.id}
-                className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
+                className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} min-w-0`}
               >
                 <div
-                  className={`max-w-3xl rounded-2xl p-3.5 text-xs sm:text-sm ${
+                  className={`max-w-[92%] sm:max-w-3xl rounded-2xl p-3 sm:p-3.5 text-xs sm:text-sm break-words ${
                     isUser
                       ? 'bg-amber-600 text-white font-medium rounded-br-none shadow-md'
                       : 'bg-[#18110b] border border-[#3b271a] text-amber-100/95 rounded-bl-none shadow-lg'
@@ -312,18 +305,14 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
                 >
                   <div className="flex items-center justify-between gap-3 mb-1 text-[10px] font-mono opacity-75">
                     <span className="font-bold uppercase">
-                      {isUser
-                        ? isEn
-                          ? 'You'
-                          : 'Tú'
-                        : isEn
-                        ? 'Gemini News Analyst'
-                        : 'Gemini Analista de Noticias'}
+                      {isUser ? (isEn ? 'You' : 'Tú') : 'Gemini'}
                     </span>
                     <span>{msg.nyTime || msg.timestamp}</span>
                   </div>
 
-                  <div className="text-xs sm:text-sm">{renderFormattedContent(msg.content)}</div>
+                  <div className="text-xs sm:text-sm break-words">
+                    {renderFormattedContent(msg.content)}
+                  </div>
 
                   {/* External News Sources Links */}
                   {!isUser && msg.sources && msg.sources.length > 0 && (
@@ -350,11 +339,9 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
           {isLoading && (
             <div className="flex items-start">
               <div className="bg-[#18110b] border border-[#3b271a] rounded-2xl rounded-bl-none p-3.5 text-xs font-mono text-amber-300 flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                <RefreshCw className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
                 <span>
-                  {isEn
-                    ? 'Gemini is analyzing macro news, yields & market impact...'
-                    : 'Gemini está analizando las noticias macro, bonos e impacto en el mercado...'}
+                  {isEn ? 'Gemini is thinking...' : 'Gemini está respondiendo...'}
                 </span>
               </div>
             </div>
@@ -369,7 +356,7 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
             e.preventDefault();
             handleSendMessage();
           }}
-          className="p-3 bg-[#120c08] border-t border-[#3b271a] flex items-center gap-2"
+          className="p-2.5 sm:p-3 bg-[#120c08] border-t border-[#3b271a] flex items-center gap-2 min-w-0"
         >
           <input
             type="text"
@@ -377,18 +364,18 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
             onChange={(e) => setInput(e.target.value)}
             placeholder={
               isEn
-                ? 'Ask any question about economic news (e.g., How does CPI or Fed rate affect Gold/Nasdaq today?)...'
-                : 'Escribe tu duda sobre noticias (ej. ¿Cómo afecta hoy el CPI o la Fed al Oro o Nasdaq?)...'
+                ? 'Ask Gemini anything (general questions, news, macro, calculations)...'
+                : 'Escribe cualquier pregunta a Gemini (dudas generales, noticias, cálculos)...'
             }
-            className="flex-1 bg-[#18110b] border border-[#3b271a] rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-amber-200/40 focus:outline-none focus:border-amber-500 font-sans"
+            className="flex-1 min-w-0 bg-[#18110b] border border-[#3b271a] rounded-xl px-3 sm:px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-amber-200/40 focus:outline-none focus:border-amber-500 font-sans"
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs flex items-center gap-1.5 transition disabled:opacity-50 shrink-0 shadow"
+            className="px-3.5 sm:px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs flex items-center gap-1.5 transition disabled:opacity-50 shrink-0 shadow"
           >
             <Send className="w-3.5 h-3.5" />
-            <span>{isEn ? 'Ask Gemini' : 'Preguntar'}</span>
+            <span>{isEn ? 'Send' : 'Enviar'}</span>
           </button>
         </form>
       </div>

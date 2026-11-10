@@ -218,12 +218,12 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
 
         {/* Balance & Risk Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-[#3b271a] text-xs font-mono">
-          <div className="p-3 rounded-xl bg-[#120c08] border border-[#3b271a]">
+          <div className="p-3 rounded-xl bg-[#120c08] border border-[#3b271a] min-w-0">
             <label className="block text-[10px] uppercase text-amber-200/70 mb-1">
               {isEn ? 'Account Balance (USD)' : 'Balance de Cuenta (USD)'}
             </label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div className="relative flex-1 min-w-[110px]">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-amber-400 font-bold">$</span>
                 <input
                   type="number"
@@ -233,29 +233,31 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
                   className="w-full bg-[#18110b] border border-[#3b271a] rounded-lg pl-6 pr-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-amber-500"
                 />
               </div>
-              {[5000, 10000, 25000, 50000, 100000].map((b) => (
-                <button
-                  key={b}
-                  type="button"
-                  onClick={() => setAccountBalance(b)}
-                  className={`px-2 py-1 rounded text-[10px] border ${
-                    accountBalance === b
-                      ? 'bg-amber-600 text-white border-amber-400 font-bold'
-                      : 'bg-[#18110b] text-amber-200/60 border-[#3b271a]'
-                  }`}
-                >
-                  ${b / 1000}k
-                </button>
-              ))}
+              <div className="flex flex-wrap items-center gap-1">
+                {[5000, 10000, 25000, 50000, 100000].map((b) => (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => setAccountBalance(b)}
+                    className={`px-2 py-1 rounded text-[10px] border ${
+                      accountBalance === b
+                        ? 'bg-amber-600 text-white border-amber-400 font-bold'
+                        : 'bg-[#18110b] text-amber-200/60 border-[#3b271a]'
+                    }`}
+                  >
+                    ${b / 1000}k
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-[#120c08] border border-[#3b271a]">
+          <div className="p-3 rounded-xl bg-[#120c08] border border-[#3b271a] min-w-0">
             <label className="block text-[10px] uppercase text-amber-200/70 mb-1">
               {isEn ? 'Risk per Trade (%)' : 'Riesgo por Operación (%)'}
             </label>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex gap-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {[0.25, 0.50, 0.75, 1.00].map((r) => (
                   <button
                     key={r}
