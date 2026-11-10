@@ -9,6 +9,8 @@ import {
   Database,
   Settings,
   Newspaper,
+  Radar,
+  Award,
 } from 'lucide-react';
 import { KillzoneSession, AppSettings } from '../types/trading';
 
@@ -117,7 +119,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const allNavItems = [
     { id: 'terminal', label: isEn ? 'Terminal' : 'Terminal', icon: Activity, visible: true },
+    {
+      id: 'scanner',
+      label: isEn ? 'Best Setups' : 'Mejor Entrada',
+      icon: Radar,
+      visible: settings.showScannerTab ?? true,
+    },
     { id: 'entries', label: isEn ? 'Request Entries' : 'Pedir Entradas', icon: Compass, visible: true },
+    {
+      id: 'strategies',
+      label: isEn ? 'Strategies' : 'Estrategias',
+      icon: Award,
+      visible: settings.showStrategiesTab ?? true,
+    },
     {
       id: 'newschat',
       label: isEn ? 'News Chat' : 'Chat Noticias',

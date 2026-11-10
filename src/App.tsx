@@ -7,6 +7,8 @@ import { DocumentManager } from './components/DocumentManager';
 import { PropFirmCalculator } from './components/PropFirmCalculator';
 import { SettingsModal } from './components/SettingsModal';
 import { NewsGeminiChat } from './components/NewsGeminiChat';
+import { MultiIndexScanner } from './components/MultiIndexScanner';
+import { StrategiesPlaybook } from './components/StrategiesPlaybook';
 import {
   InstrumentQuote,
   KillzoneSession,
@@ -14,7 +16,9 @@ import {
   AppSettings,
   DEFAULT_APP_SETTINGS,
 } from './types/trading';
-import { Activity, Newspaper, Sparkles } from 'lucide-react';
+import { DEFAULT_KNOWLEDGE_DOCUMENTS, StrategyPlaybook } from './lib/strategiesData';
+import { getSpec } from './lib/instruments';
+import { Activity, Newspaper, Sparkles, Radar } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('terminal');
@@ -51,53 +55,40 @@ export default function App() {
     setSettings(DEFAULT_APP_SETTINGS);
   };
 
-  // Only keep the Online Web Sources base by default; user can add custom analyses in Bases
+  // Pre-load the 8 built-in institutional strategy & web databases + preserve any custom user bases
   const [documents, setDocuments] = useState<CustomDocument[]>(() => {
-    const defaultDocs: CustomDocument[] = [
-      {
-        id: 'doc-builtin-web-sources',
-        name: 'Fuentes Web Financieras Online (Reuters, Bloomberg, Kitco, CNBC, Investing)',
-        type: 'builtin',
-        content: `# Fuentes Web Financieras Online — TRstudio
-1. Noticias Macroeconómicas y Bancos Centrales (Fed, BCE, CPI/NFP):
-- Reuters Markets (reuters.com/markets)
-- Bloomberg Markets (bloomberg.com/markets)
-- Financial Times (ft.com)
-- ForexLive (forexlive.com)
-- Investing.com / DailyFX (investing.com/economic-calendar/)
-
-2. Oro y Metales Preciosos (XAU/USD):
-- World Gold Council (gold.org)
-- Kitco News (kitco.com)
-
-3. Índices Bursátiles y Bonos (US30 / NAS100 / US10Y / VIX):
-- CNBC Markets (cnbc.com/world-markets)
-- Yahoo Finance (finance.yahoo.com)
-- MarketWatch (marketwatch.com)`,
-        charCount: 620,
-        description: 'Base online oficial con las mejores webs financieras para investigar mercado y extraer entradas en tiempo real.',
-        addedAt: new Date().toISOString(),
-        isActive: true,
-      },
-    ];
-
     try {
-      const saved = localStorage.getItem('trstudio_knowledge_docs_v1');
-      if (saved) {
-        const parsed: CustomDocument[] = JSON.parse(saved);
+      const savedV2 = localStorage.getItem('trstudio_knowledge_docs_v2');
+      if (savedV2) {
+        const parsed: CustomDocument[] = JSON.parse(savedV2);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          // Ensure all built-in documents from DEFAULT_KNOWLEDGE_DOCUMENTS exist
+          const existingIds = new Set(parsed.map((d) => d.id));
+          const missingBuiltins = DEFAULT_KNOWLEDGE_DOCUMENTS.filter(
+            (b) => !existingIds.has(b.id)
+          );
+          return [...parsed, ...missingBuiltins];
+        }
+      }
+
+      // Migrate custom documents from v1 if present
+      const savedV1 = localStorage.getItem('trstudio_knowledge_docs_v1');
+      if (savedV1) {
+        const parsedV1: CustomDocument[] = JSON.parse(savedV1);
+        if (Array.isArray(parsedV1)) {
+          const customDocs = parsedV1.filter((d) => d.type === 'custom');
+          return [...customDocs, ...DEFAULT_KNOWLEDGE_DOCUMENTS];
         }
       }
     } catch (e) {
       console.warn('Could not load saved knowledge docs:', e);
     }
-    return defaultDocs;
+    return DEFAULT_KNOWLEDGE_DOCUMENTS;
   });
 
   useEffect(() => {
     try {
-      localStorage.setItem('trstudio_knowledge_docs_v1', JSON.stringify(documents));
+      localStorage.setItem('trstudio_knowledge_docs_v2', JSON.stringify(documents));
     } catch (e) {
       console.warn('Could not persist docs to localStorage:', e);
     }
@@ -138,16 +129,19 @@ export default function App() {
     const tickInterval = setInterval(() => {
       setInstruments((prev) =>
         prev.map((inst) => {
+          const spec = getSpec(inst.symbol);
+          const decimals = spec ? spec.decimals : inst.symbol === 'EURUSD' ? 4 : 2;
           const step =
             inst.symbol === 'EURUSD'
               ? (Math.random() - 0.495) * 0.00012
               : inst.symbol === 'XAUUSD'
               ? (Math.random() - 0.49) * 0.25
-              : inst.symbol === 'NAS100' || inst.symbol === 'US30'
+              : inst.symbol === 'NAS100' || inst.symbol === 'US30' || inst.symbol === 'JP225' || inst.symbol === 'HK50'
               ? (Math.random() - 0.49) * 1.8
+              : inst.symbol === 'GER40' || inst.symbol === 'UK100' || inst.symbol === 'EU50' || inst.symbol === 'FRA40' || inst.symbol === 'US500' || inst.symbol === 'US2000'
+              ? (Math.random() - 0.49) * 0.65
               : (Math.random() - 0.5) * 0.015;
 
-          const decimals = inst.symbol === 'EURUSD' ? 4 : inst.symbol === 'US10Y' ? 3 : 2;
           const nextPrice = Number((inst.price + step).toFixed(decimals));
           const direction: 'up' | 'down' | 'none' =
             nextPrice > inst.price ? 'up' : nextPrice < inst.price ? 'down' : 'none';
@@ -235,6 +229,11 @@ export default function App() {
     setActiveTab('reports');
   };
 
+  const handleUseStrategyForEntry = (asset: string, _strategy: StrategyPlaybook) => {
+    setTargetAssetForAction(asset);
+    setActiveTab('entries');
+  };
+
   const activeDocs = documents.filter((d) => d.isActive);
   const useOnlineOnly =
     activeDocs.length === 0 ||
@@ -277,7 +276,25 @@ export default function App() {
             onRefreshFeed={refreshFeed}
             onRequestEntry={handleQuickRequestEntry}
             onGenerateReport={handleQuickGenerateReport}
+            onOpenScanner={() => setActiveTab('scanner')}
+            initialAsset={targetAssetForAction}
             settings={settings}
+          />
+        )}
+
+        {activeTab === 'scanner' && (
+          <MultiIndexScanner
+            defaultBalance={settings.defaultBalance}
+            defaultRisk={settings.defaultRisk}
+            language={settings.language}
+            onSelectAssetInChart={(symbol) => {
+              setTargetAssetForAction(symbol);
+              setActiveTab('terminal');
+            }}
+            onOpenInSetupEngine={(symbol) => {
+              setTargetAssetForAction(symbol);
+              setActiveTab('entries');
+            }}
           />
         )}
 
@@ -291,6 +308,13 @@ export default function App() {
             defaultBalance={settings.defaultBalance}
             defaultRisk={settings.defaultRisk}
             language={settings.language}
+          />
+        )}
+
+        {activeTab === 'strategies' && (
+          <StrategiesPlaybook
+            language={settings.language}
+            onUseStrategyForEntry={handleUseStrategyForEntry}
           />
         )}
 
@@ -330,25 +354,45 @@ export default function App() {
         {activeTab === 'calculator' && <PropFirmCalculator language={settings.language} />}
       </main>
 
-      {/* Quick Floating Button to Open Gemini News Chat when on other tabs */}
-      {activeTab !== 'newschat' && (
-        <button
-          type="button"
-          onClick={() => setActiveTab('newschat')}
-          className="fixed bottom-5 right-5 z-30 px-4 py-2.5 rounded-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs shadow-2xl border border-amber-300/60 flex items-center gap-2 transition-transform hover:scale-105"
-          title={
-            settings.language === 'en'
-              ? 'Open Gemini Chat to resolve doubts about news'
-              : 'Abrir Chat Gemini para resolver dudas sobre noticias'
-          }
-        >
-          <Newspaper className="w-4 h-4" />
-          <span>
-            {settings.language === 'en' ? 'Gemini News Chat' : 'Dudas de Noticias (Gemini)'}
-          </span>
-          <Sparkles className="w-3.5 h-3.5" />
-        </button>
-      )}
+      {/* Quick Floating Action Buttons */}
+      <div className="fixed bottom-5 right-5 z-30 flex flex-col sm:flex-row items-end sm:items-center gap-2">
+        {activeTab !== 'scanner' && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('scanner')}
+            className="px-4 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs shadow-2xl border border-emerald-300/60 flex items-center gap-2 transition-transform hover:scale-105"
+            title={
+              settings.language === 'en'
+                ? 'Open Multi-Index Best Setup Scanner'
+                : 'Escáner de Mejor Entrada Multi-Índice (#1 Mayor Acierto)'
+            }
+          >
+            <Radar className="w-4 h-4" />
+            <span>
+              {settings.language === 'en' ? 'Best Trade Scanner' : 'Mejor Entrada (#1 Acierto)'}
+            </span>
+          </button>
+        )}
+
+        {activeTab !== 'newschat' && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('newschat')}
+            className="px-4 py-2.5 rounded-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs shadow-2xl border border-amber-300/60 flex items-center gap-2 transition-transform hover:scale-105"
+            title={
+              settings.language === 'en'
+                ? 'Open Gemini Chat to resolve doubts about news'
+                : 'Abrir Chat Gemini para resolver dudas sobre noticias'
+            }
+          >
+            <Newspaper className="w-4 h-4" />
+            <span>
+              {settings.language === 'en' ? 'Gemini News Chat' : 'Dudas de Noticias (Gemini)'}
+            </span>
+            <Sparkles className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
 
       {settings.showFooter && (
         <footer className="border-t border-[#3b271a] bg-[#120d09]/90 py-5 mt-12 text-xs font-mono text-amber-200/50">
@@ -359,8 +403,8 @@ export default function App() {
               <span>•</span>
               <span>
                 {settings.language === 'en'
-                  ? 'Market & Execution Terminal'
-                  : 'Terminal de Mercado & Ejecución'}
+                  ? '12 Primary CFD Indices • Multi-Index Scanner • 19 Financial Portals'
+                  : '12 Índices CFD Primarios • Escáner de Mejor Entrada • 19 Webs Financieras'}
               </span>
             </div>
 

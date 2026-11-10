@@ -25,6 +25,8 @@ interface DocumentManagerProps {
 export const DocumentManager: React.FC<DocumentManagerProps> = ({
   documents,
   onToggleDocActive,
+  onActivateAllDocs,
+  onDeactivateAllDocs,
   onAddCustomDoc,
   onDeleteDoc,
   language = 'es',
@@ -95,6 +97,21 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onActivateAllDocs}
+              className="px-2.5 py-2 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 text-xs font-mono font-bold transition"
+            >
+              {isEn ? 'Activate All' : 'Activar Todas'}
+            </button>
+            <button
+              type="button"
+              onClick={onDeactivateAllDocs}
+              className="px-2.5 py-2 rounded-xl bg-[#24170f] hover:bg-[#312015] text-amber-200/80 border border-[#4d3221] text-xs font-mono transition"
+            >
+              {isEn ? 'Deactivate All' : 'Desactivar Todas'}
+            </button>
+
             <label className="px-3 py-2 rounded-xl bg-[#24170f] hover:bg-[#312015] text-amber-200 border border-[#4d3221] text-xs font-medium cursor-pointer transition flex items-center gap-2">
               <Upload className="w-4 h-4 text-amber-400" />
               <span>{isEn ? 'Upload File (.txt / .md)' : 'Subir Archivo (.txt / .md)'}</span>

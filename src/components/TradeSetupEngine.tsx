@@ -20,6 +20,7 @@ import {
   Target,
 } from 'lucide-react';
 import { TradeSetup, KillzoneSession, CustomDocument, AppLanguage } from '../types/trading';
+import { TRADEABLE_INSTRUMENTS } from '../lib/instruments';
 
 interface TradeSetupEngineProps {
   initialAsset?: string;
@@ -69,12 +70,14 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
   const chosenDoc =
     documents.find((d) => d.id === selectedDocId) || customDocs[0] || documents[0];
 
-  const assets = [
-    { symbol: 'NAS100', name: 'Nasdaq 100' },
-    { symbol: 'US30', name: 'Dow Jones' },
-    { symbol: 'XAUUSD', name: isEn ? 'Gold (XAUUSD)' : 'Oro (Gold)' },
-    { symbol: 'EURUSD', name: isEn ? 'Euro / Dollar' : 'Euro / Dólar' },
-  ];
+  React.useEffect(() => {
+    if (initialAsset) setSelectedAsset(initialAsset);
+  }, [initialAsset]);
+
+  const assets = TRADEABLE_INSTRUMENTS.map((inst) => ({
+    symbol: inst.symbol,
+    name: isEn ? inst.nameEn : inst.nameEs,
+  }));
 
   const handleRequestTradeSetup = async () => {
     setIsLoading(true);
@@ -378,14 +381,15 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
         <div className="pt-3 border-t border-[#3b271a] grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-semibold text-amber-200/80 mb-1.5 uppercase tracking-wider font-mono">
-              {isEn ? '1. Asset' : '1. Activo'}
+              {isEn ? '1. CFD Index / Asset (12)' : '1. Índice CFD / Activo (12)'}
             </label>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-1">
               {assets.map((item) => (
                 <button
                   key={item.symbol}
                   onClick={() => setSelectedAsset(item.symbol)}
-                  className={`px-3 py-2 rounded-lg font-mono text-xs font-bold transition border ${
+                  title={item.name}
+                  className={`px-2 py-1.5 rounded-lg font-mono text-[11px] font-bold transition border ${
                     selectedAsset === item.symbol
                       ? 'bg-amber-600 text-white border-amber-400 shadow-sm'
                       : 'bg-[#120c08] text-amber-200/70 border-[#3b271a] hover:border-amber-700'
@@ -721,8 +725,8 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
             </div>
           </div>
 
-          {/* Lot Size Summary */}
-          <div className="p-4 border-b border-[#3b271a] grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs bg-[#150e09]">
+          {/* Lot Size & Exact Dollar Loss / Profit Summary */}
+          <div className="p-4 border-b border-[#3b271a] grid grid-cols-1 sm:grid-cols-4 gap-3 font-mono text-xs bg-[#150e09]">
             <div className="p-3 rounded-lg bg-[#120c08] border border-[#3b271a] flex items-center justify-between">
               <div>
                 <span className="text-amber-200/60 text-[10px] block">
@@ -732,19 +736,34 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
                   {tradeSetup.propFirmRiskCalculation.recommendedLots}{' '}
                   {isEn ? 'Lots' : 'Lotes'}
                 </span>
+                <span className="text-[10px] text-amber-200/50 block">
+                  {tradeSetup.propFirmRiskCalculation.contractSizeSpec}
+                </span>
               </div>
               <Calculator className="w-5 h-5 text-amber-500/50" />
             </div>
 
-            <div className="p-3 rounded-lg bg-[#120c08] border border-[#3b271a]">
-              <span className="text-amber-200/60 text-[10px] block">
-                {isEn ? 'Monetary Risk' : 'Riesgo Monetario'} ({tradeSetup.propFirmRiskCalculation.riskPercentage}%)
+            <div className="p-3 rounded-lg bg-[#120c08] border border-rose-900/40">
+              <span className="text-rose-400 text-[10px] font-bold block">
+                {isEn ? 'Exact Loss if SL Hit' : 'Pérdida Exacta si toca SL'} ({tradeSetup.propFirmRiskCalculation.riskPercentage}%)
               </span>
-              <span className="text-base font-bold text-white">
-                ${tradeSetup.propFirmRiskCalculation.monetaryRiskUsd.toLocaleString()} USD
+              <span className="text-base font-black text-rose-300 mt-0.5 block">
+                -${(tradeSetup.propFirmRiskCalculation.actualRiskAtStopUsd ?? tradeSetup.propFirmRiskCalculation.monetaryRiskUsd).toFixed(2)} USD
               </span>
-              <span className="text-[10px] text-amber-200/40 block">
-                {tradeSetup.propFirmRiskCalculation.contractSizeSpec}
+              <span className="text-[10px] text-amber-200/50 block">
+                {isEn ? 'Target Risk:' : 'Riesgo objetivo:'} ${tradeSetup.propFirmRiskCalculation.monetaryRiskUsd.toFixed(2)} USD
+              </span>
+            </div>
+
+            <div className="p-3 rounded-lg bg-[#120c08] border border-emerald-900/40">
+              <span className="text-emerald-400 text-[10px] font-bold block">
+                {isEn ? 'Projected Profit TP1 / TP2' : 'Ganancia en TP1 / TP2'}
+              </span>
+              <span className="text-base font-black text-emerald-300 mt-0.5 block">
+                +${(tradeSetup.propFirmRiskCalculation.projectedProfitTp1Usd ?? tradeSetup.propFirmRiskCalculation.monetaryRiskUsd * 1.8).toFixed(2)} / +${(tradeSetup.propFirmRiskCalculation.projectedProfitTp2Usd ?? tradeSetup.propFirmRiskCalculation.monetaryRiskUsd * 3.0).toFixed(2)}
+              </span>
+              <span className="text-[10px] text-amber-200/50 block">
+                R:R 1:1.8 (TP1) • 1:3.0 (TP2)
               </span>
             </div>
 
@@ -797,7 +816,7 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
 
               {tradeSetup.externalSources && tradeSetup.externalSources.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 font-mono text-[11px]">
-                  {tradeSetup.externalSources.slice(0, 4).map((src, idx) => (
+                  {tradeSetup.externalSources.slice(0, 6).map((src, idx) => (
                     <div
                       key={idx}
                       className="p-2 rounded-lg bg-[#120c08] border border-[#3b271a] flex items-center justify-between gap-2"
@@ -810,7 +829,7 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
                         href={src.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-cyan-400 hover:text-cyan-300 underline shrink-0"
+                        className="text-amber-400 hover:text-amber-200 underline shrink-0"
                       >
                         {isEn ? 'View source' : 'Ver fuente'}
                       </a>

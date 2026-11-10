@@ -11,6 +11,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { AppLanguage, ExternalSourceAttribution, KillzoneSession } from '../types/trading';
+import { TRADEABLE_INSTRUMENTS } from '../lib/instruments';
 
 interface ChatMessage {
   id: string;
@@ -217,22 +218,22 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
           </div>
 
           {/* Asset Focus & Clear Button */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[11px] font-mono text-amber-200/70">
               {isEn ? 'Asset Focus:' : 'Activo:'}
             </span>
-            {['NAS100', 'US30', 'XAUUSD', 'EURUSD'].map((sym) => (
+            {TRADEABLE_INSTRUMENTS.map((inst) => (
               <button
-                key={sym}
+                key={inst.symbol}
                 type="button"
-                onClick={() => setSelectedAsset(sym)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition ${
-                  selectedAsset === sym
+                onClick={() => setSelectedAsset(inst.symbol)}
+                className={`px-2 py-1 rounded-lg text-[11px] font-mono font-bold border transition ${
+                  selectedAsset === inst.symbol
                     ? 'bg-amber-600 text-white border-amber-400'
                     : 'bg-[#120c08] text-amber-200/70 border-[#3b271a] hover:border-amber-600'
                 }`}
               >
-                {sym}
+                {inst.symbol}
               </button>
             ))}
 

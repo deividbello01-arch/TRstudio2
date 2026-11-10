@@ -12,6 +12,7 @@ import {
   Newspaper
 } from 'lucide-react';
 import { TradingReport, KillzoneSession, AppLanguage } from '../types/trading';
+import { TRADEABLE_INSTRUMENTS } from '../lib/instruments';
 
 interface ReportGeneratorProps {
   initialAsset?: string;
@@ -46,11 +47,12 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
 
+  React.useEffect(() => {
+    if (initialAsset) setSelectedAsset(initialAsset);
+  }, [initialAsset]);
+
   const assets = [
-    { value: 'NAS100', label: 'NAS100' },
-    { value: 'US30', label: 'US30' },
-    { value: 'XAUUSD', label: 'XAUUSD' },
-    { value: 'EURUSD', label: 'EURUSD' },
+    ...TRADEABLE_INSTRUMENTS.map((i) => ({ value: i.symbol, label: i.symbol })),
     { value: 'TODOS', label: isEn ? 'ALL' : 'TODOS' },
   ];
 

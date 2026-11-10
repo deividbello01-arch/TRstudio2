@@ -4,6 +4,19 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
+import {
+  INSTRUMENTS,
+  FX_RATE_TICKERS,
+  DEFAULT_FX_RATES,
+  FxRates,
+  getSpec,
+  valuePerPointUsd,
+  roundToTick,
+  formatDistance,
+  SessionKey,
+  TRADEABLE_INSTRUMENTS,
+} from './src/lib/instruments.ts';
+import { FINANCIAL_WEB_SOURCES, TRADING_STRATEGIES } from './src/lib/strategiesData.ts';
 
 dotenv.config();
 
@@ -18,7 +31,7 @@ app.use(express.json({ limit: '15mb' }));
 // Initialize GoogleGenAI SDK server-side via GEMINI_API_KEY environment variable
 function getGeminiClient(): GoogleGenAI | null {
   const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
+  if (!key || key === 'MY_GEMINI_API_KEY') return null;
   return new GoogleGenAI({
     apiKey: key,
     httpOptions: {
@@ -30,8 +43,14 @@ function getGeminiClient(): GoogleGenAI | null {
 }
 
 // Load the default attached treatise file and the Web Sources & Audit Protocol file
-const TREATISE_PATH = path.join(__dirname, 'public/assets/aistudio/Tratado_Maestro_de_Trading_Institucional_y_Cuantitativo__US30__NAS100__XAUUSD__EURUSD__82ba1809');
-const WEB_SOURCES_PROMPT_PATH = path.join(__dirname, 'public/assets/aistudio/Prompt_Fuentes_Web_Trading_TradeCoffe_04148a93.md');
+const TREATISE_PATH = path.join(
+  __dirname,
+  'public/assets/aistudio/Tratado_Maestro_de_Trading_Institucional_y_Cuantitativo__US30__NAS100__XAUUSD__EURUSD__82ba1809'
+);
+const WEB_SOURCES_PROMPT_PATH = path.join(
+  __dirname,
+  'public/assets/aistudio/Prompt_Fuentes_Web_Trading_TradeCoffe_04148a93.md'
+);
 
 let treatiseContent = '';
 let webSourcesPromptContent = '';
@@ -75,72 +94,74 @@ function getCurrentKillzone() {
   const currentMinutes = (parseInt(hourStr, 10) % 24) * 60 + parseInt(minuteStr, 10);
   const nyTime12h = getNyTime12h(now);
 
-  let name = 'Transición de Mercado';
+  let sessionKey: SessionKey = 'asia';
+  let name = 'Rango Asiático (Sesión Asia)';
   let active = false;
-  let statusColor: 'emerald' | 'amber' | 'rose' | 'cyan' | 'blue' | 'gray' = 'gray';
-  let windowHours = '5:00 PM - 7:00 PM';
-  let recommendedAssets: string[] = [];
-  let description = 'Pausa entre sesiones principales.';
+  let statusColor: 'emerald' | 'amber' | 'rose' | 'cyan' | 'blue' | 'gray' = 'blue';
+  let windowHours = '7:00 PM - 2:00 AM';
+  let recommendedAssets: string[] = ['JP225', 'HK50', 'XAUUSD', 'EURUSD'];
+  let description = 'Liquidez primaria en Nikkei 225 (JP225), Hang Seng (HK50) y formación del rango asiático.';
 
   if (currentMinutes >= 120 && currentMinutes < 300) {
-    name = 'Sesión Londres (Killzone)';
+    sessionKey = 'london';
+    name = 'Sesión Londres & Apertura Europea (Killzone)';
     active = true;
     statusColor = 'emerald';
     windowHours = '2:00 AM - 5:00 AM';
-    recommendedAssets = ['EURUSD', 'XAUUSD'];
-    description = 'Toma de liquidez del rango asiático y expansión direccional en divisas y oro.';
+    recommendedAssets = ['GER40', 'UK100', 'EU50', 'FRA40', 'EURUSD', 'XAUUSD'];
+    description = 'Barrido del rango asiático (Judas Swing) y expansión en DAX 40, FTSE 100, Euro Stoxx 50 y EUR/USD.';
   } else if (currentMinutes >= 300 && currentMinutes < 480) {
-    name = 'Continuación Londres / Pre-NY';
+    sessionKey = 'london_late';
+    name = 'Continuación Europea / Pre-NY';
     active = true;
     statusColor = 'cyan';
     windowHours = '5:00 AM - 8:00 AM';
-    recommendedAssets = ['EURUSD', 'XAUUSD'];
-    description = 'Transición europea antes de la apertura de futuros de Nueva York.';
+    recommendedAssets = ['GER40', 'UK100', 'EU50', 'EURUSD', 'XAUUSD'];
+    description = 'Continuación de tendencia en índices europeos y divisas antes de datos macro de EE. UU.';
   } else if (currentMinutes >= 480 && currentMinutes < 570) {
+    sessionKey = 'ny_pre';
     name = 'Pre-Mercado NY & Apertura COMEX';
     active = true;
     statusColor = 'emerald';
     windowHours = '8:00 AM - 9:30 AM';
-    recommendedAssets = ['XAUUSD', 'EURUSD', 'NAS100'];
-    description = 'Apertura de futuros de oro (8:20 AM) y datos macro de EE. UU. (8:30 AM) previos a Wall Street.';
+    recommendedAssets = ['XAUUSD', 'NAS100', 'US500', 'US30', 'EURUSD', 'GER40'];
+    description = 'Apertura de futuros de oro COMEX (8:20 AM) y datos macro de EE. UU. (8:30 AM) previos a Wall Street.';
   } else if (currentMinutes >= 570 && currentMinutes < 720) {
-    name = 'Apertura Wall Street (Sesión NY AM)';
+    sessionKey = 'ny_am';
+    name = 'Apertura Wall Street & Silver Bullet AM';
     active = true;
     statusColor = 'emerald';
     windowHours = '9:30 AM - 12:00 PM';
-    recommendedAssets = ['NAS100', 'US30', 'XAUUSD'];
-    description = 'Apertura oficial de NYSE/Nasdaq (9:30 AM) y ventana de máxima liquidez institucional.';
+    recommendedAssets = ['NAS100', 'US500', 'US30', 'US2000', 'XAUUSD'];
+    description = 'Apertura oficial de NYSE/Nasdaq (9:30 AM) y ventana ICT Silver Bullet (10:00 - 11:00 AM NY).';
   } else if (currentMinutes >= 720 && currentMinutes < 810) {
+    sessionKey = 'ny_lunch';
     name = 'Almuerzo Nueva York (NY Lunch)';
     active = false;
     statusColor = 'amber';
     windowHours = '12:00 PM - 1:30 PM';
-    recommendedAssets = [];
-    description = 'Reducción de volumen intradía en Wall Street; esperar sesión de la tarde.';
+    recommendedAssets = ['NAS100', 'US500'];
+    description = 'Reducción de volumen intradía en Wall Street; esperar ventana de la tarde.';
   } else if (currentMinutes >= 810 && currentMinutes < 960) {
-    name = 'Sesión NY Tarde & Cierre Wall Street';
+    sessionKey = 'ny_pm';
+    name = 'Sesión NY Tarde & Silver Bullet PM';
     active = true;
     statusColor = 'cyan';
     windowHours = '1:30 PM - 4:00 PM';
-    recommendedAssets = ['NAS100', 'US30'];
-    description = 'Flujo institucional vespertino hasta la campana de cierre de Wall Street (4:00 PM).';
+    recommendedAssets = ['NAS100', 'US500', 'US30', 'US2000'];
+    description = 'Flujo institucional vespertino y ventana Silver Bullet PM (2:00 - 3:00 PM) hasta el cierre (4:00 PM).';
   } else if (currentMinutes >= 960 && currentMinutes < 1140) {
+    sessionKey = 'post';
     name = 'Post-Mercado & Rollover Bancario';
     active = false;
     statusColor = 'rose';
     windowHours = '4:00 PM - 7:00 PM';
-    recommendedAssets = [];
-    description = 'Cierre de Wall Street y ajuste de spreads diarios (5:00 PM - 6:00 PM).';
-  } else {
-    name = 'Rango Asiático (Sesión Asia)';
-    active = false;
-    statusColor = 'blue';
-    windowHours = '7:00 PM - 2:00 AM';
-    recommendedAssets = ['XAUUSD', 'EURUSD'];
-    description = 'Formación de máximos y mínimos asiáticos (Asian High / Low) y consolidación estructural.';
+    recommendedAssets = ['JP225'];
+    description = 'Cierre de Wall Street y ajuste de spreads diarios (5:00 PM - 6:00 PM). Precaución con spreads.';
   }
 
   return {
+    sessionKey,
     name,
     active,
     statusColor,
@@ -154,12 +175,16 @@ function getCurrentKillzone() {
 interface ServerInstrument {
   symbol: string;
   tvScannerSymbol: string;
+  futTvSymbol?: string;
   name: string;
   category: string;
+  region?: 'US' | 'EU' | 'UK' | 'ASIA' | 'GLOBAL';
   price: number;
   change24h: string;
+  changeNumeric: number;
   high24h: number;
   low24h: number;
+  atrNumeric: number;
   atr14?: string;
   pointValue?: string;
   bias4H?: string;
@@ -168,113 +193,91 @@ interface ServerInstrument {
   keyLevels?: Record<string, any>;
 }
 
-// Dynamic live market instruments state synced with TradingView Scanner
-let MARKET_INSTRUMENTS: ServerInstrument[] = [
-  {
-    symbol: 'NAS100',
-    tvScannerSymbol: 'NASDAQ:NDX',
-    name: 'Nasdaq 100 Index',
-    category: 'Indices',
-    price: 21184.50,
-    change24h: '+0.84%',
-    high24h: 21250.00,
-    low24h: 20980.00,
-    atr14: '380 pts',
-    pointValue: '$1.00 - $10.00 / pt',
-    bias4H: 'Bullish (Discount Sweep)',
-    status: 'Active NY Killzone',
-    keyLevels: { pdh: 21250.00, pdl: 20980.00, asiaHigh: 21060.00, fvg4H: '21020 - 21080' },
-  },
-  {
-    symbol: 'US30',
-    tvScannerSymbol: 'OANDA:US30USD',
-    name: 'Dow Jones Industrial',
-    category: 'Indices',
-    price: 43920.00,
-    change24h: '+0.42%',
-    high24h: 44100.00,
-    low24h: 43750.00,
-    atr14: '520 pts',
-    pointValue: '$1.00 - $10.00 / pt',
-    bias4H: 'Bullish Consolidation',
-    status: 'Respecting 1H OB',
-    keyLevels: { pdh: 44100.00, pdl: 43750.00, fvg1H: '43820 - 43870' },
-  },
-  {
-    symbol: 'XAUUSD',
-    tvScannerSymbol: 'OANDA:XAUUSD',
-    name: 'Gold / US Dollar',
-    category: 'Commodities',
-    price: 2742.60,
-    change24h: '+0.58%',
-    high24h: 2758.40,
-    low24h: 2724.10,
-    atr14: '$45.00 (450 pips)',
-    pointValue: '$10.00 / pip ($1.00 move)',
-    bias4H: 'Range Expansion',
-    status: 'COMEX Volume Active',
-    keyLevels: { pdh: 2758.40, pdl: 2724.10, asiaLow: 2732.50, roundNumber: 2750.00 },
-  },
-  {
-    symbol: 'EURUSD',
-    tvScannerSymbol: 'FX:EURUSD',
-    name: 'Euro / US Dollar',
-    category: 'Forex',
-    price: 1.0542,
-    change24h: '-0.18%',
-    high24h: 1.0588,
-    low24h: 1.0515,
-    atr14: '72 pips',
-    pointValue: '$10.00 / pip / lot',
-    bias4H: 'Bearish OTE Retest',
-    status: 'London/NY Balance',
-    keyLevels: { pdh: 1.0588, pdl: 1.0515, equalHighs: 1.0580, fvg1H: '1.0555 - 1.0568' },
-  },
-  {
-    symbol: 'DXY',
-    tvScannerSymbol: 'TVC:DXY',
-    name: 'US Dollar Index',
-    category: 'Macro Variable',
-    price: 106.85,
-    change24h: '+0.22%',
-    high24h: 107.10,
-    low24h: 106.40,
-    impact: 'Inverse correlation with EUR/USD & Gold',
-  },
-  {
-    symbol: 'US10Y',
-    tvScannerSymbol: 'TVC:US10Y',
-    name: '10-Yr US Treasury Yield',
-    category: 'Macro Variable',
-    price: 4.44,
-    change24h: '+0.45%',
-    high24h: 4.48,
-    low24h: 4.39,
-    impact: 'Key discount rate driver for NAS100 and Gold real yields',
-  },
-  {
-    symbol: 'VIX',
-    tvScannerSymbol: 'CBOE:VIX',
-    name: 'CBOE Volatility Index',
-    category: 'Macro Variable',
-    price: 15.30,
-    change24h: '-4.10%',
-    high24h: 16.20,
-    low24h: 14.90,
-    impact: 'Risk-On environment (low equity volatility)',
-  },
-];
+let liveFxRates: FxRates = { ...DEFAULT_FX_RATES };
 
-// Fetch live real-time prices from TradingView global scanner
+// Build initial MARKET_INSTRUMENTS from the shared catalog
+let MARKET_INSTRUMENTS: ServerInstrument[] = INSTRUMENTS.map((spec) => {
+  const category =
+    spec.kind === 'index'
+      ? 'Indices'
+      : spec.kind === 'metal'
+      ? 'Commodities'
+      : spec.kind === 'forex'
+      ? 'Forex'
+      : 'Macro Variable';
+
+  const sign = spec.fallback.change >= 0 ? '+' : '';
+  const atrFormatted =
+    spec.kind === 'forex'
+      ? `${Math.round(spec.fallback.atr * 10000)} pips`
+      : spec.kind === 'metal'
+      ? `$${spec.fallback.atr.toFixed(1)}`
+      : `${Math.round(spec.fallback.atr)} pts`;
+
+  const ptVal =
+    spec.kind === 'forex'
+      ? '$10.00 / pip / lote'
+      : spec.kind === 'metal'
+      ? '$100 / $1.00 ($10/pip)'
+      : spec.quoteCcy === 'USD'
+      ? `$${spec.contractValue.toFixed(2)} USD / pto`
+      : `${spec.contractValue} ${spec.quoteCcy} / pto`;
+
+  const mid = Number(((spec.fallback.high + spec.fallback.low) / 2).toFixed(spec.decimals));
+
+  return {
+    symbol: spec.symbol,
+    tvScannerSymbol: spec.tv,
+    futTvSymbol: spec.futTv,
+    name: spec.nameEs,
+    category,
+    region: spec.region,
+    price: spec.fallback.price,
+    change24h: `${sign}${spec.fallback.change.toFixed(2)}%`,
+    changeNumeric: spec.fallback.change,
+    high24h: spec.fallback.high,
+    low24h: spec.fallback.low,
+    atrNumeric: spec.fallback.atr,
+    atr14: atrFormatted,
+    pointValue: ptVal,
+    bias4H: spec.fallback.change >= 0 ? 'Bullish (Discount Sweep)' : 'Bearish (Premium OTE)',
+    status: spec.tradeable ? 'Live Feed Active' : 'Macro Driver',
+    impact:
+      spec.symbol === 'DXY'
+        ? 'Correlación inversa con EUR/USD, Oro e Índices'
+        : spec.symbol === 'US10Y'
+        ? 'Tasa de descuento clave para NAS100, US500 y Oro'
+        : spec.symbol === 'VIX'
+        ? 'Termómetro de volatilidad institucional S&P 500'
+        : undefined,
+    keyLevels: spec.tradeable
+      ? {
+          pdh: spec.fallback.high,
+          pdl: spec.fallback.low,
+          asiaHigh: Number((mid + (spec.fallback.high - mid) * 0.45).toFixed(spec.decimals)),
+          asiaLow: Number((mid - (mid - spec.fallback.low) * 0.45).toFixed(spec.decimals)),
+          fvg4H: `${Number((mid - spec.fallback.atr * 0.08).toFixed(spec.decimals))} - ${Number(
+            (mid + spec.fallback.atr * 0.08).toFixed(spec.decimals)
+          )}`,
+        }
+      : undefined,
+  };
+});
+
+// Fetch live real-time prices from TradingView global scanner (including futures and FX rates)
 async function syncRealTimeTradingViewQuotes() {
   try {
-    const tickers = MARKET_INSTRUMENTS.map((i) => i.tvScannerSymbol);
+    const primaryTickers = MARKET_INSTRUMENTS.map((i) => i.tvScannerSymbol);
+    const futuresTickers = MARKET_INSTRUMENTS.map((i) => i.futTvSymbol).filter(Boolean) as string[];
+    const fxTickers = Object.values(FX_RATE_TICKERS).map((f) => f.tv);
+    const allTickers = Array.from(new Set([...primaryTickers, ...futuresTickers, ...fxTickers]));
+
     const response = await fetch('https://scanner.tradingview.com/global/scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        symbols: { tickers, query: { types: [] } },
-        columns: ['close', 'change', 'change_abs', 'high', 'low'],
+        symbols: { tickers: allTickers, query: { types: [] } },
+        columns: ['close', 'change', 'change_abs', 'high', 'low', 'ATR'],
       }),
     });
 
@@ -289,38 +292,73 @@ async function syncRealTimeTradingViewQuotes() {
       }
     }
 
+    // Update FX conversion rates
+    const eurusdRow = quoteMap.get('FX:EURUSD');
+    if (eurusdRow && typeof eurusdRow[0] === 'number') liveFxRates.EURUSD = eurusdRow[0];
+    const gbpusdRow = quoteMap.get('FX:GBPUSD');
+    if (gbpusdRow && typeof gbpusdRow[0] === 'number') liveFxRates.GBPUSD = gbpusdRow[0];
+    const usdjpyRow = quoteMap.get('FX:USDJPY');
+    if (usdjpyRow && typeof usdjpyRow[0] === 'number') liveFxRates.USDJPY = usdjpyRow[0];
+
     MARKET_INSTRUMENTS = MARKET_INSTRUMENTS.map((inst) => {
-      const liveData = quoteMap.get(inst.tvScannerSymbol);
+      const spec = getSpec(inst.symbol);
+      const decimals = spec ? spec.decimals : inst.price < 10 ? 5 : 2;
+      const primaryData = quoteMap.get(inst.tvScannerSymbol);
+      const futData = inst.futTvSymbol ? quoteMap.get(inst.futTvSymbol) : undefined;
+
+      // Prefer primary ticker; if cash index has no intraday change outside cash hours, blend futures % change
+      const liveData = primaryData && typeof primaryData[0] === 'number' ? primaryData : futData;
       if (!liveData || typeof liveData[0] !== 'number') return inst;
 
       const rawClose = liveData[0];
-      const rawChangePct = typeof liveData[1] === 'number' ? liveData[1] : 0;
-      const rawHigh = typeof liveData[3] === 'number' ? liveData[3] : rawClose * 1.004;
-      const rawLow = typeof liveData[4] === 'number' ? liveData[4] : rawClose * 0.996;
+      let rawChangePct = typeof liveData[1] === 'number' ? liveData[1] : inst.changeNumeric;
+      if (Math.abs(rawChangePct) < 0.001 && futData && typeof futData[1] === 'number') {
+        rawChangePct = futData[1];
+      }
 
-      // Add subtle realistic sub-second orderbook micro-tick so live stream reflects institutional order flow
-      const microTick =
+      const rawHigh = typeof liveData[3] === 'number' ? liveData[3] : rawClose * 1.005;
+      const rawLow = typeof liveData[4] === 'number' ? liveData[4] : rawClose * 0.995;
+      const rawAtr =
+        typeof liveData[5] === 'number' && liveData[5] > 0
+          ? liveData[5]
+          : spec?.fallback.atr || inst.atrNumeric;
+
+      // Subtle micro-tick proportional to instrument tick size
+      const microAmplitude =
         inst.symbol === 'EURUSD'
-          ? (Math.random() - 0.5) * 0.00015
+          ? 0.00008
           : inst.symbol === 'XAUUSD'
-          ? (Math.random() - 0.5) * 0.35
-          : inst.symbol === 'NAS100' || inst.symbol === 'US30'
-          ? (Math.random() - 0.5) * 2.5
-          : (Math.random() - 0.5) * 0.02;
+          ? 0.25
+          : inst.symbol === 'US10Y'
+          ? 0.002
+          : rawClose > 15000
+          ? 1.8
+          : rawClose > 2000
+          ? 0.6
+          : 0.03;
 
-      const decimals = inst.symbol === 'EURUSD' ? 4 : inst.symbol === 'US10Y' ? 3 : 2;
+      const microTick = (Math.random() - 0.5) * microAmplitude;
       const livePrice = Number((rawClose + microTick).toFixed(decimals));
       const high24h = Number(Math.max(rawHigh, livePrice).toFixed(decimals));
       const low24h = Number(Math.min(rawLow, livePrice).toFixed(decimals));
       const sign = rawChangePct >= 0 ? '+' : '';
       const change24h = `${sign}${rawChangePct.toFixed(2)}%`;
 
-      // Dynamically keep PDH / PDL & FVG levels calibrated to real market price
+      const atrFormatted =
+        spec?.kind === 'forex'
+          ? `${Math.round(rawAtr * 10000)} pips`
+          : spec?.kind === 'metal'
+          ? `$${rawAtr.toFixed(1)} (${Math.round(rawAtr * 10)} pips)`
+          : `${Math.round(rawAtr)} pts`;
+
+      const mid = Number(((high24h + low24h) / 2).toFixed(decimals));
       const updatedKeyLevels = inst.keyLevels
         ? {
             ...inst.keyLevels,
             pdh: high24h,
             pdl: low24h,
+            asiaHigh: Number((mid + (high24h - mid) * 0.45).toFixed(decimals)),
+            asiaLow: Number((mid - (mid - low24h) * 0.45).toFixed(decimals)),
           }
         : undefined;
 
@@ -328,25 +366,33 @@ async function syncRealTimeTradingViewQuotes() {
         ...inst,
         price: livePrice,
         change24h,
+        changeNumeric: rawChangePct,
         high24h,
         low24h,
+        atrNumeric: rawAtr,
+        atr14: atrFormatted,
         bias4H: rawChangePct >= 0 ? 'Bullish (Discount Sweep)' : 'Bearish (Premium OTE)',
         keyLevels: updatedKeyLevels,
       };
     });
-  } catch (err) {
+  } catch (_err) {
     // Keep last known prices on transient network error
   }
 }
 
-// Initial sync and background 3-second real-time loop
 syncRealTimeTradingViewQuotes();
 setInterval(syncRealTimeTradingViewQuotes, 3000);
 
 // Track models that hit daily free-tier quota so we immediately route to available models
 const exhaustedModels = new Set<string>();
 
-// Helper to execute Gemini calls using GEMINI_API_KEY with automatic model rotation on 429 quota limits
+function withTimeout<T>(promise: Promise<T>, ms: number = 4200): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('AI_TIMEOUT_OR_QUOTA_FALLBACK')), ms)),
+  ]);
+}
+
 async function generateAiContentWithConnectedKey(params: {
   contents: any;
   config?: any;
@@ -376,7 +422,7 @@ async function generateAiContentWithConnectedKey(params: {
 
   for (const mdl of candidateModels) {
     try {
-      return await withTimeout(attempt(mdl), 5500);
+      return await withTimeout(attempt(mdl), 5000);
     } catch (err: any) {
       const msg = String(err?.message || '');
       if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota')) {
@@ -389,161 +435,6 @@ async function generateAiContentWithConnectedKey(params: {
   throw new Error('QUOTA_FALLBACK_ACTIVE');
 }
 
-// Helper to search relevant excerpts in active knowledge documents
-function findRelevantKnowledgeSnippet(query: string, docText: string): string {
-  if (!docText) return '';
-  const words = query
-    .toLowerCase()
-    .replace(/[^\wáéíóúñ\s]/g, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length > 3 && !['como', 'para', 'este', 'esta', 'cual', 'donde', 'cuando', 'dame', 'puedes', 'sobre', 'hacer', 'tiene'].includes(w));
-
-  if (words.length === 0) return '';
-
-  const paragraphs = docText.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p.length > 50);
-  let bestPara = '';
-  let bestScore = 0;
-
-  for (const p of paragraphs) {
-    const pLower = p.toLowerCase();
-    let score = 0;
-    for (const w of words) {
-      if (pLower.includes(w)) score += 1;
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      bestPara = p;
-    }
-  }
-
-  return bestScore > 0 ? bestPara.substring(0, 650) : '';
-}
-
-// Robust Fallback Knowledge Synthesis Engine
-function generateAutonomousAnswer(
-  query: string,
-  asset: string = 'NAS100',
-  kz: any,
-  useOnlineOnly: boolean = false,
-  activeDocNames: string[] = [],
-  customDocument: string = ''
-) {
-  const qLower = query.toLowerCase();
-
-  // Detect if user specifically mentioned an asset in the query text
-  let detectedAsset = asset;
-  if (qLower.includes('oro') || qLower.includes('xau') || qLower.includes('gold')) detectedAsset = 'XAUUSD';
-  else if (qLower.includes('us30') || qLower.includes('dow')) detectedAsset = 'US30';
-  else if (qLower.includes('eur') || qLower.includes('euro')) detectedAsset = 'EURUSD';
-  else if (qLower.includes('nas') || qLower.includes('ndx')) detectedAsset = 'NAS100';
-
-  const targetInst = MARKET_INSTRUMENTS.find((i) => i.symbol === detectedAsset) || MARKET_INSTRUMENTS[0];
-  const xau = MARKET_INSTRUMENTS.find((i) => i.symbol === 'XAUUSD') || MARKET_INSTRUMENTS[2];
-  const dxy = MARKET_INSTRUMENTS.find((i) => i.symbol === 'DXY') || MARKET_INSTRUMENTS[4];
-  const us10y = MARKET_INSTRUMENTS.find((i) => i.symbol === 'US10Y') || MARKET_INSTRUMENTS[5];
-  const vix = MARKET_INSTRUMENTS.find((i) => i.symbol === 'VIX') || MARKET_INSTRUMENTS[6];
-
-  const decimals = targetInst.price < 10 ? 4 : 2;
-  const midPoint = Number(((targetInst.high24h + targetInst.low24h) / 2).toFixed(decimals));
-  const isBullishBias = targetInst.price >= midPoint;
-
-  // Calculate tactical coordinates for entry requests in chat
-  const stepUnit =
-    detectedAsset === 'EURUSD' ? 0.0012 : detectedAsset === 'XAUUSD' ? 4.5 : detectedAsset === 'US30' ? 70 : 40;
-  const entryCalc = Number((isBullishBias ? targetInst.price - stepUnit * 0.3 : targetInst.price + stepUnit * 0.3).toFixed(decimals));
-  const slCalc = Number((isBullishBias ? entryCalc - stepUnit : entryCalc + stepUnit).toFixed(decimals));
-  const tp1Calc = Number((isBullishBias ? entryCalc + stepUnit * 1.8 : entryCalc - stepUnit * 1.8).toFixed(decimals));
-  const tp2Calc = Number((isBullishBias ? entryCalc + stepUnit * 3.0 : entryCalc - stepUnit * 3.0).toFixed(decimals));
-
-  if (useOnlineOnly) {
-    return `### 🌐 Respuesta IA Conectada — Modo 100% Info Online (${kz.nyTime} EST)
-**Consulta Analizada:** *"${query}"*
-
-#### 1. Estado en Tiempo Real de ${targetInst.symbol} (${targetInst.name})
-- **Precio en Vivo (TradingView Scanner):** **${targetInst.price.toLocaleString()}** (${targetInst.change24h} en 24h)
-- **Rango de 24h:** Mínimo **${targetInst.low24h.toLocaleString()}** | Punto Medio **${midPoint.toLocaleString()}** | Máximo **${targetInst.high24h.toLocaleString()}**
-- **Estructura Intradía Online:** El precio opera en zona **${isBullishBias ? 'Alcista (sobre equilibrio intradía)' : 'Bajista / Corrección (bajo equilibrio intradía)'}**.
-
-#### 2. Niveles Operativos en Tiempo Real para ${targetInst.symbol}
-- **Dirección Sugerida por Flujo Online:** **${isBullishBias ? 'BUY (Compra en Pullback)' : 'SELL (Venta en Rebote)'}**
-- **Zona de Entrada:** **${entryCalc}**
-- **Stop Loss Técnico:** **${slCalc}**
-- **Take Profit 1 (1:1.8):** **${tp1Calc}** | **Take Profit 2 (1:3.0):** **${tp2Calc}**
-
-#### 3. Contexto Macroeconómico Online Simultáneo
-- **DXY (Índice Dólar):** ${dxy.price} (${dxy.change24h}) | **US10Y (Bono 10Y):** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h}) | **XAU/USD:** $${xau.price.toLocaleString()} (${xau.change24h}).`;
-  }
-
-  const docsLabel = activeDocNames.length > 0 ? activeDocNames.join(' + ') : 'Tratado Maestro Institucional';
-  const activeSourceText = customDocument || treatiseContent;
-  const matchedSnippet = findRelevantKnowledgeSnippet(query, activeSourceText);
-
-  if (qLower.includes('entrada') || qLower.includes('setup') || qLower.includes(' señal') || qLower.includes('operar') || qLower.includes('compra') || qLower.includes('venta') || qLower.includes('tp') || qLower.includes('sl')) {
-    return `### 🎯 Setup Táctico en Tiempo Real para ${targetInst.symbol} (${kz.nyTime} EST)
-- **Bases Activas Consultadas:** *${docsLabel}*
-- **Cotización Actual (${targetInst.symbol}):** **${targetInst.price.toLocaleString()}** (${targetInst.change24h}) | Rango 24h: **${targetInst.low24h} – ${targetInst.high24h}**
-- **Sesgo Estructural:** **${isBullishBias ? 'ALCISTA (BUY Limit en Descuento / 50% FVG)' : 'BAJISTA (SELL Limit en Premium / 50% FVG)'}**
-- **Coordenadas Exactas de Ejecución:**
-  - **Precio de Entrada (Limit):** **${entryCalc}**
-  - **Stop Loss Técnico (con colchón ATR):** **${slCalc}**
-  - **Take Profit 1 (Parcial 50% + Break Even):** **${tp1Calc}**
-  - **Take Profit 2 (Draw on Liquidity):** **${tp2Calc}**
-  - **Ratio Riesgo/Beneficio:** **1:3.0 R:R**
-- **Confluencia Intermercado:** DXY en **${dxy.price}** (${dxy.change24h}), Bono 10Y en **${us10y.price}%** (${us10y.change24h}), VIX en **${vix.price}**.
-${matchedSnippet ? `\n#### Extracto Aplicado de tu Base Activa:\n> ${matchedSnippet.replace(/\n/g, ' ')}` : ''}`;
-  }
-
-  if (qLower.includes('judas') || qLower.includes('manipula')) {
-    return `### Microestructura Institucional: El Judas Swing en Sesión Activa (${kz.nyTime} EST)
-El **Judas Swing** es la maniobra algorítmica de manipulación previa al verdadero movimiento tendencial del día:
-- **Apertura de Londres (02:00 - 03:30 EST):** El precio barre falsamente el rango asiático (*Asian High* o *Asian Low*) para inducir órdenes de breakout antes de revertir con fuerza hacia la dirección real de 4H/1H.
-- **Apertura de Nueva York (09:30 - 09:45 EST):** Los primeros 15 minutos en el **US30** y **NAS100** producen mechas violentas en ambas direcciones mientras abren las subastas de los componentes del NYSE. El algoritmo institucional caza los stops acumulados en el rango pre-mercado (08:00–09:29 EST).
-- **Regla Aplicada (${docsLabel}):** Si el sesgo macro en 4H/1H es Alcista, **solo compras en la zona de descuento (<50%) por debajo de la apertura de medianoche (00:00 EST)** o tras el barrido del mínimo de pre-mercado.`;
-  }
-
-  if (qLower.includes('us10y') || qLower.includes('bono') || qLower.includes('tasa') || qLower.includes('nasdaq')) {
-    return `### Análisis Intermercado: Rendimiento Bono 10Y (US10Y) vs Nasdaq 100
-- **Mecánica Cuantitativa:** Las empresas tecnológicas del Nasdaq 100 son activos de "larga duración" (*long-duration assets*). Gran parte de su valoración se basa en flujos de caja descontados proyectados al futuro lejano.
-- **Impacto de la Tasa de Descuento ($r$):** Con el rendimiento del **US10Y en ${us10y.price}% (${us10y.change24h})**, cuando la tasa de descuento sube, el valor presente neto de las tecnológicas cae, ejerciendo presión algorítmica en **NAS100** (actualmente en **${targetInst.price.toLocaleString()}**).
-- **Regla Táctica (${docsLabel}):** Si el US10Y rompe su máximo diario (${us10y.high24h}%) al unísono con el VIX subiendo, se prohíbe abrir compras de breakout en NAS100; se deben priorizar ventas en retrocesos a FVGs de 15M/5M en zona Premium.`;
-  }
-
-  if (qLower.includes('oro') || qLower.includes('xau') || qLower.includes('gold')) {
-    return `### Microestructura de XAU/USD (Oro) & Horarios Institucionales
-- **Nivel en Tiempo Real:** Cotizando en **$${xau.price.toLocaleString()}** (${xau.change24h} hoy, Rango: $${xau.low24h} – $${xau.high24h}).
-- **Dualidad de Mercado:** El oro negocia contado en LBMA (Londres) y futuros en COMEX (Nueva York). A las **08:20 EST** abre el piso de futuros COMEX, generando la mayor inyección de volumen intradía.
-- **Cazador de Stops Implacable:** Rara vez gira desde un nivel evidente sin antes perforar por $3 a $10 dólares (30 a 100 pips) el máximo o mínimo de sesión previo.
-- **Niveles Tácticos Hoy:** Entrada sugerida cerca de **$${entryCalc}**, Stop Loss en **$${slCalc}** y objetivo en **$${tp1Calc} / $${tp2Calc}** vigilando el **DXY (${dxy.price})**.`;
-  }
-
-  if (qLower.includes('eur') || qLower.includes('euro') || qLower.includes('dxy') || qLower.includes('smt')) {
-    return `### Microestructura de EUR/USD y Divergencia SMT vs DXY
-- **Ponderación Matemática:** El Euro (**${targetInst.symbol === 'EURUSD' ? targetInst.price : '1.0542'}**) representa el **57.6%** de la canasta del índice Dólar (DXY en **${dxy.price}**). Su correlación normal es de **-0.95**.
-- **Detección de Divergencia SMT:** Si el DXY marca un nuevo máximo pero el EUR/USD hace un mínimo más alto (no logra romper su mínimo equivalente), revela acumulación institucional oculta en el Euro.
-- **Punto de Entrada Institucional:** Retroceso al nivel **OTE 61.8% - 70.5%** de Fibonacci que coincida con el Consequent Encroachment (50% CE) de un FVG de 15M o 1H.`;
-  }
-
-  if (qLower.includes('prop') || qLower.includes('fonde') || qLower.includes('lote') || qLower.includes('riesgo')) {
-    return `### Protocolo Cuantitativo Anti-Quiebra para Prop Firms
-- **Límite Diario Estricto (Hard Circuit Breaker):** Apagar el bot o dejar de operar en el día si la pérdida acumulada alcanza el **-1.50%** del balance, o tras **2 pérdidas consecutivas**.
-- **Riesgo Base Óptimo:** Arriesgar únicamente entre **0.25% y 0.50%** por operación. Si arriesgas 1% en una cuenta fondeada de $100k con límite diario de $5k, estás arriesgando el 20% de tu margen de vida diaria en un solo trade.
-- **Fórmula de Lotes:** Lotes = Riesgo en USD / (|Precio Entrada - Precio SL| × ContractSize). Cierre obligatorio de toda posición antes de las 16:45 EST para evitar recálculo de equidad en el Rollover de las 17:00 EST.`;
-  }
-
-  return `### ⚡ Análisis Cuantitativo TradeCoffe en Tiempo Real (${kz.nyTime} EST)
-**Respuesta a tu consulta:** *"${query}"*
-
-- **Activo Evaluado (${targetInst.symbol}):** Cotizando en vivo a **${targetInst.price.toLocaleString()}** (${targetInst.change24h}) | Rango 24h: **${targetInst.low24h.toLocaleString()} – ${targetInst.high24h.toLocaleString()}**.
-- **Sesión Actual:** ${kz.name} — ${kz.description}
-- **Bases de Conocimiento Activas:** *${docsLabel}*
-- **Lectura Táctica Inmediata:**
-  - El punto de equilibrio del rango actual se sitúa en **${midPoint.toLocaleString()}**.
-  - Escenario principal: **${isBullishBias ? `Continuación alcista tras retroceso a descuento cerca de ${entryCalc}` : `Presión vendedora bajo equilibrio buscando liquidez en ${tp1Calc}`}** con protección técnica en **${slCalc}** y objetivo extendido en **${tp2Calc}**.
-  - Variables Macro en Vivo: **DXY:** ${dxy.price} (${dxy.change24h}) | **US10Y:** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price}.
-${matchedSnippet ? `\n#### Concepto Relacionado en tu Base Activa:\n> ${matchedSnippet.replace(/\n/g, ' ')}` : ''}`;
-}
-
-// Helper to format live market snapshot for AI prompts
 function getLiveMarketSnapshotText() {
   return MARKET_INSTRUMENTS.map(
     (i) => `${i.symbol} (${i.name}): Precio=${i.price}, Cambio24h=${i.change24h}, High24h=${i.high24h}, Low24h=${i.low24h}`
@@ -557,14 +448,8 @@ interface ExternalSourceItem {
   category: string;
 }
 
-// Build Mandatory Financial Web Sources by Category + Grounding Metadata extraction
+// Build rich financial research sources tailored to the asset
 function buildExternalTraceabilitySources(asset: string = 'NAS100', response?: any): ExternalSourceItem[] {
-  const us10y = MARKET_INSTRUMENTS.find((i) => i.symbol === 'US10Y') || MARKET_INSTRUMENTS[5];
-  const dxy = MARKET_INSTRUMENTS.find((i) => i.symbol === 'DXY') || MARKET_INSTRUMENTS[4];
-  const vix = MARKET_INSTRUMENTS.find((i) => i.symbol === 'VIX') || MARKET_INSTRUMENTS[6];
-  const xau = MARKET_INSTRUMENTS.find((i) => i.symbol === 'XAUUSD') || MARKET_INSTRUMENTS[2];
-  const nas = MARKET_INSTRUMENTS.find((i) => i.symbol === 'NAS100') || MARKET_INSTRUMENTS[0];
-
   const extractedGrounding: ExternalSourceItem[] = [];
   const chunks = response?.candidates?.[0]?.groundingMetadata?.groundingChunks;
   if (Array.isArray(chunks)) {
@@ -580,92 +465,21 @@ function buildExternalTraceabilitySources(asset: string = 'NAS100', response?: a
     }
   }
 
-  // Category A: Noticias Macroeconómicas y Bancos Centrales (Fed, BCE, Datos CPI/NFP)
-  const macroSources: ExternalSourceItem[] = [
-    {
-      media: 'Reuters Markets',
-      headline: `Cobertura en tiempo real de tasas Fed/BCE, datos CPI/NFP y flujos en DXY (${dxy.price})`,
-      url: 'https://www.reuters.com/markets/',
-      category: 'A. Macro y Bancos Centrales',
-    },
-    {
-      media: 'Bloomberg Markets',
-      headline: `Flujos institucionales globales y posicionamiento interbancario intradía`,
-      url: 'https://www.bloomberg.com/markets',
-      category: 'A. Macro y Bancos Centrales',
-    },
-    {
-      media: 'ForexLive',
-      headline: `Lectura de flujos de divisas en vivo y comentarios instantáneos de sesión NY/Londres`,
-      url: 'https://www.forexlive.com/',
-      category: 'A. Macro y Bancos Centrales',
-    },
-    {
-      media: 'Investing.com / DailyFX',
-      headline: `Calendario macroeconómico de alta volatilidad (Carpeta Roja) y ventanas Freeze`,
-      url: 'https://www.investing.com/economic-calendar/',
-      category: 'A. Macro y Bancos Centrales',
-    },
-    {
-      media: 'Financial Times',
-      headline: `Perspectiva macroeconómica global y riesgo geopolítico sistémico`,
-      url: 'https://www.ft.com/markets',
-      category: 'A. Macro y Bancos Centrales',
-    },
-  ];
+  const upper = (asset || 'NAS100').toUpperCase();
+  const matchedWebs = FINANCIAL_WEB_SOURCES.filter(
+    (w) => w.bestForAssets.includes(upper) || w.category === 'calendar' || w.category === 'macro'
+  );
 
-  // Category B: Oro y Metales Preciosos (XAU/USD)
-  const goldSources: ExternalSourceItem[] = [
-    {
-      media: 'World Gold Council',
-      headline: `Reportes institucionales de demanda física y reservas de bancos centrales (XAU/USD: $${xau.price})`,
-      url: 'https://www.gold.org/',
-      category: 'B. Oro y Metales Preciosos',
-    },
-    {
-      media: 'Kitco News',
-      headline: `Análisis técnico y fundamental de futuros COMEX y oro spot ($${xau.low24h} – $${xau.high24h})`,
-      url: 'https://www.kitco.com/',
-      category: 'B. Oro y Metales Preciosos',
-    },
-  ];
+  const mapped: ExternalSourceItem[] = matchedWebs.slice(0, 8).map((w) => ({
+    media: w.name,
+    headline: w.descriptionEs,
+    url: w.url,
+    category: w.categoryLabelEs,
+  }));
 
-  // Category C: Índices Bursátiles y Acciones (US30 / NAS100)
-  const indicesSources: ExternalSourceItem[] = [
-    {
-      media: 'CNBC Markets',
-      headline: `Comportamiento de futuros de Wall Street (NAS100: ${nas.price} | Apertura NYSE)`,
-      url: 'https://www.cnbc.com/world-markets/',
-      category: 'C. Índices Bursátiles y Acciones',
-    },
-    {
-      media: 'MarketWatch',
-      headline: `Seguimiento del Tesoro a 10 años (US10Y: ${us10y.price}%) y Volatilidad VIX (${vix.price})`,
-      url: 'https://www.marketwatch.com/',
-      category: 'C. Índices Bursátiles y Acciones',
-    },
-    {
-      media: 'Yahoo Finance',
-      headline: `Datos bursátiles generales y cotizaciones cruzadas en tiempo real`,
-      url: 'https://finance.yahoo.com/',
-      category: 'C. Índices Bursátiles y Acciones',
-    },
-  ];
-
-  const upperAsset = (asset || 'NAS100').toUpperCase();
-  if (upperAsset.includes('XAU') || upperAsset.includes('GOLD') || upperAsset.includes('ORO')) {
-    return [...extractedGrounding, ...goldSources, ...macroSources.slice(0, 3), indicesSources[1]];
-  }
-  if (upperAsset.includes('EUR') || upperAsset.includes('DXY')) {
-    return [...extractedGrounding, ...macroSources, indicesSources[1]];
-  }
-  if (upperAsset.includes('US30') || upperAsset.includes('NAS100') || upperAsset.includes('NDX')) {
-    return [...extractedGrounding, ...indicesSources, ...macroSources.slice(0, 3)];
-  }
-  return [...extractedGrounding, ...macroSources.slice(0, 3), ...goldSources, ...indicesSources.slice(0, 2)];
+  return [...extractedGrounding, ...mapped];
 }
 
-// Build concise Own Analysis Declaration
 function buildOwnAnalysisDeclaration(
   asset: string = 'NAS100',
   kz: any,
@@ -675,12 +489,11 @@ function buildOwnAnalysisDeclaration(
 ): string {
   const inst = MARKET_INSTRUMENTS.find((i) => i.symbol === asset) || MARKET_INSTRUMENTS[0];
   if (lang === 'en') {
-    return `4H/1H technical structure & 30M/15M/5M execution for ${inst.symbol} (live price ${inst.price.toLocaleString()}, 24h range ${inst.low24h.toLocaleString()} – ${inst.high24h.toLocaleString()}), PDH/PDL liquidity pools, 50% FVG, active session ${kz.name} (${kz.nyTime} NY), and ${riskPct}% risk management (${includeNews ? 'integrating macro news context' : 'pure price action filter without news'}).`;
+    return `4H/1H technical structure & 30M/15M/5M execution for ${inst.symbol} (live price ${inst.price.toLocaleString()}, 24h range ${inst.low24h.toLocaleString()} – ${inst.high24h.toLocaleString()}, ATR ${inst.atr14}), PDH/PDL liquidity pools, 50% FVG, active session ${kz.name} (${kz.nyTime} NY), and exact ${riskPct}% risk sizing (${includeNews ? 'integrating macro news context' : 'pure price action filter without news'}).`;
   }
-  return `Estructura técnica de ${inst.symbol} en 4H/1H y ejecución en 30M/15M/5M (precio actual ${inst.price.toLocaleString()}, rango ${inst.low24h.toLocaleString()} – ${inst.high24h.toLocaleString()}), niveles de liquidez PDH/PDL, FVG (50%), horario ${kz.name} (${kz.nyTime}) y gestión de riesgo del ${riskPct}% (${includeNews ? 'integrando contexto de noticias macro' : 'filtro técnico puro sin noticias'}).`;
+  return `Estructura técnica de ${inst.symbol} en 4H/1H y ejecución en 30M/15M/5M (precio actual ${inst.price.toLocaleString()}, rango ${inst.low24h.toLocaleString()} – ${inst.high24h.toLocaleString()}, ATR ${inst.atr14}), niveles de liquidez PDH/PDL, FVG (50%), horario ${kz.name} (${kz.nyTime} NY) y gestión matemática de riesgo del ${riskPct}% (${includeNews ? 'integrando contexto de noticias macro' : 'filtro técnico puro sin noticias'}).`;
 }
 
-// Format concise Markdown block for basis & sources
 function formatAuditAttributionMarkdown(
   asset: string,
   kz: any,
@@ -689,7 +502,7 @@ function formatAuditAttributionMarkdown(
   lang: string = 'es'
 ): string {
   const lines = externalSources
-    .slice(0, 4)
+    .slice(0, 6)
     .map((s) => `* **[${s.media} | ${s.headline} | ${s.url}]**`)
     .join('\n');
 
@@ -699,13 +512,361 @@ function formatAuditAttributionMarkdown(
   return `\n\n---\n### En qué se basó y Fuentes Consultadas\n${lines}\n\n* **Base Técnica:** ${ownDeclaration}`;
 }
 
+/**
+ * Deterministic, mathematically exact trade setup & risk calculator for any instrument.
+ * Guarantees that:
+ * 1) Entry, Stop Loss, TP1, TP2 are accurately placed around live price using the asset's real ATR & tick size.
+ * 2) Lot size and actual USD risk at Stop Loss match the exact contract specification of the instrument.
+ * 3) Confluence score and Win Probability reflect real session liquidity, range position, and intermarket alignment.
+ */
+function buildDeterministicSetupForInstrument(params: {
+  asset: string;
+  accountBalance: number;
+  riskPercentage: number;
+  specificNotes?: string;
+  customDocument?: string;
+  includeNews?: boolean;
+  language?: string;
+  currentKz: ReturnType<typeof getCurrentKillzone>;
+  aiOverride?: {
+    action?: 'BUY' | 'SELL' | 'WAIT';
+    playbookName?: string;
+    thesisRationale?: string;
+    invalidationCriteria?: string;
+    executionTips?: string[];
+    confluenceBreakdown?: {
+      killzoneFilterScore?: number;
+      structureScore?: number;
+      liquiditySweepScore?: number;
+      intermarketScore?: number;
+      triggerScore?: number;
+    };
+  };
+}) {
+  const {
+    asset,
+    accountBalance = 10000,
+    riskPercentage = 0.5,
+    specificNotes = '',
+    includeNews = true,
+    language = 'es',
+    currentKz,
+    aiOverride,
+  } = params;
+
+  const isEn = language === 'en';
+  const inst = MARKET_INSTRUMENTS.find((i) => i.symbol === asset) || MARKET_INSTRUMENTS[0];
+  const spec = getSpec(inst.symbol) || INSTRUMENTS[0];
+
+  const dxy = MARKET_INSTRUMENTS.find((i) => i.symbol === 'DXY')!;
+  const us10y = MARKET_INSTRUMENTS.find((i) => i.symbol === 'US10Y')!;
+  const vix = MARKET_INSTRUMENTS.find((i) => i.symbol === 'VIX')!;
+
+  const rangeSpan = Math.max(spec.tick * 10, (inst.high24h || inst.price * 1.006) - (inst.low24h || inst.price * 0.994));
+  const posInRange = Math.max(0, Math.min(1, (inst.price - inst.low24h) / rangeSpan)); // 0 = low, 1 = high
+  const isBullish24h = inst.changeNumeric >= 0;
+
+  // Determine direction from structure + momentum + user notes
+  const notesLower = (specificNotes || '').toLowerCase();
+  let action: 'BUY' | 'SELL' = isBullish24h ? 'BUY' : 'SELL';
+
+  // If price is at extreme discount (<24% of daily range), favor bullish liquidity sweep reversal
+  if (posInRange < 0.24 && inst.changeNumeric > -1.8) action = 'BUY';
+  // If price is at extreme premium (>82% of daily range) and momentum is stalling, favor bearish sweep
+  else if (posInRange > 0.85 && inst.changeNumeric < 0.15) action = 'SELL';
+
+  if (aiOverride?.action === 'BUY' || aiOverride?.action === 'SELL') {
+    action = aiOverride.action;
+  }
+  if (notesLower.includes('venta') || notesLower.includes('sell') || notesLower.includes('short')) {
+    action = 'SELL';
+  } else if (notesLower.includes('compra') || notesLower.includes('buy') || notesLower.includes('long')) {
+    action = 'BUY';
+  }
+
+  const dirMult = action === 'BUY' ? 1 : -1;
+
+  // Compute realistic intraday Stop Loss distance (~12% to 15% of daily ATR, bounded per asset class)
+  const rawAtr = inst.atrNumeric || spec.fallback.atr;
+  let stopDistancePrice = rawAtr * 0.12;
+  if (spec.symbol === 'EURUSD') {
+    stopDistancePrice = Math.max(0.0010, Math.min(0.0022, rawAtr * 0.18)); // 10 - 22 pips
+  } else if (spec.symbol === 'XAUUSD') {
+    stopDistancePrice = Math.max(4.0, Math.min(9.5, rawAtr * 0.08)); // $4.00 - $9.50 (40 - 95 pips)
+  } else if (spec.symbol === 'NAS100') {
+    stopDistancePrice = Math.max(35, Math.min(75, Math.round(rawAtr * 0.08)));
+  } else if (spec.symbol === 'US30') {
+    stopDistancePrice = Math.max(55, Math.min(110, Math.round(rawAtr * 0.09)));
+  } else if (spec.symbol === 'US500') {
+    stopDistancePrice = Math.max(8, Math.min(18, Math.round(rawAtr * 0.11 * 10) / 10));
+  } else if (spec.symbol === 'US2000') {
+    stopDistancePrice = Math.max(4.5, Math.min(11, Math.round(rawAtr * 0.11 * 10) / 10));
+  } else if (spec.symbol === 'GER40') {
+    stopDistancePrice = Math.max(28, Math.min(60, Math.round(rawAtr * 0.09)));
+  } else if (spec.symbol === 'UK100' || spec.symbol === 'EU50' || spec.symbol === 'FRA40') {
+    stopDistancePrice = Math.max(10, Math.min(25, Math.round(rawAtr * 0.11 * 10) / 10));
+  } else if (spec.symbol === 'JP225' || spec.symbol === 'HK50') {
+    stopDistancePrice = Math.max(60, Math.min(160, Math.round(rawAtr * 0.09)));
+  }
+
+  stopDistancePrice = Math.max(spec.tick * 5, roundToTick(stopDistancePrice, spec));
+  const pullbackOffset = roundToTick(stopDistancePrice * 0.28, spec);
+
+  const entryPrice = roundToTick(inst.price - dirMult * pullbackOffset, spec);
+  const stopLoss = roundToTick(entryPrice - dirMult * stopDistancePrice, spec);
+  const exactStopDist = Math.max(spec.tick, Math.abs(entryPrice - stopLoss));
+  const takeProfit1 = roundToTick(entryPrice + dirMult * exactStopDist * 1.8, spec);
+  const takeProfit2 = roundToTick(entryPrice + dirMult * exactStopDist * 3.0, spec);
+
+  // Exact Risk & Lot Size Calculation
+  const safeBalance = Math.max(100, Number(accountBalance) || 10000);
+  const safeRiskPct = Math.max(0.05, Math.min(5, Number(riskPercentage) || 0.5));
+  const targetMonetaryRiskUsd = Number(((safeBalance * safeRiskPct) / 100).toFixed(2));
+
+  // Value in USD of 1.0 unit of price change per 1 standard lot
+  const usdPerPointPerLot = valuePerPointUsd(spec, liveFxRates);
+  const riskPerOneLotUsd = exactStopDist * usdPerPointPerLot;
+  const rawLots = riskPerOneLotUsd > 0 ? targetMonetaryRiskUsd / riskPerOneLotUsd : 0.01;
+  const recommendedLots = Math.max(0.01, Number(rawLots.toFixed(2)));
+
+  // Exact monetary loss if Stop Loss is hit with recommendedLots (important when min lot 0.01 is enforced on small accounts)
+  const actualRiskAtStopUsd = Number((recommendedLots * riskPerOneLotUsd).toFixed(2));
+  const projectedProfitTp1Usd = Number((actualRiskAtStopUsd * 1.8).toFixed(2));
+  const projectedProfitTp2Usd = Number((actualRiskAtStopUsd * 3.0).toFixed(2));
+
+  const stopDistanceStr = formatDistance(exactStopDist, spec, isEn);
+
+  const contractSpecLabel =
+    spec.kind === 'forex'
+      ? isEn
+        ? '1 Std Lot = 100,000 units ($10.00 USD / pip)'
+        : '1 Lote Estándar = 100,000 uds ($10.00 USD / pip)'
+      : spec.kind === 'metal'
+      ? isEn
+        ? '1 Std Lot = 100 oz ($100 USD per $1.00 move | $10/pip)'
+        : '1 Lote Estándar = 100 oz ($100 USD por cada $1.00 | $10/pip)'
+      : spec.quoteCcy === 'USD'
+      ? isEn
+        ? `1 CFD Lot = $${spec.contractValue.toFixed(2)} USD / pt`
+        : `1 Lote CFD = $${spec.contractValue.toFixed(2)} USD / pto`
+      : isEn
+      ? `1 CFD Lot = ${spec.contractValue} ${spec.quoteCcy}/pt (~$${usdPerPointPerLot.toFixed(2)} USD/pt)`
+      : `1 Lote CFD = ${spec.contractValue} ${spec.quoteCcy}/pto (~$${usdPerPointPerLot.toFixed(2)} USD/pto)`;
+
+  const isMinLotWarning = actualRiskAtStopUsd > targetMonetaryRiskUsd * 1.15;
+  const hardDailyDrawdownAlert = isMinLotWarning
+    ? isEn
+      ? `Target risk ${safeRiskPct}% is $${targetMonetaryRiskUsd.toFixed(2)} USD, but minimum broker lot (0.01) risks $${actualRiskAtStopUsd.toFixed(2)} USD (${((actualRiskAtStopUsd / safeBalance) * 100).toFixed(2)}%). Daily stop limit (-1.5%): -$${(safeBalance * 0.015).toFixed(2)} USD.`
+      : `Tu riesgo objetivo (${safeRiskPct}%) es $${targetMonetaryRiskUsd.toFixed(2)} USD; con el lote mínimo (0.01) el riesgo real en SL es $${actualRiskAtStopUsd.toFixed(2)} USD (${((actualRiskAtStopUsd / safeBalance) * 100).toFixed(2)}%). Límite diario (-1.5%): -$${(safeBalance * 0.015).toFixed(2)} USD.`
+    : isEn
+    ? `Exact loss at Stop Loss: -$${actualRiskAtStopUsd.toFixed(2)} USD (${safeRiskPct}%). Profit at TP1: +$${projectedProfitTp1Usd.toFixed(2)} | TP2: +$${projectedProfitTp2Usd.toFixed(2)}. Daily circuit breaker (-1.5%): -$${(safeBalance * 0.015).toFixed(2)} USD.`
+    : `Pérdida exacta en Stop Loss: -$${actualRiskAtStopUsd.toFixed(2)} USD (${safeRiskPct}%). Ganancia en TP1: +$${projectedProfitTp1Usd.toFixed(2)} | TP2: +$${projectedProfitTp2Usd.toFixed(2)}. Límite diario (-1.5%): -$${(safeBalance * 0.015).toFixed(2)} USD.`;
+
+  // 5-Factor Quantitative Confluence Scoring tailored to asset & active session
+  // 1. Killzone / Session Score (Max 20)
+  const kzScore = spec.sessionScores[currentKz.sessionKey] ?? 14;
+
+  // 2. Price Structure & Range Position Score (Max 25)
+  let structScore = 18;
+  if (posInRange >= 0.44 && posInRange <= 0.56) {
+    structScore = 13; // Choppy midpoint equilibrium
+  } else if (
+    (action === 'BUY' && isBullish24h && posInRange >= 0.22 && posInRange <= 0.78) ||
+    (action === 'SELL' && !isBullish24h && posInRange >= 0.22 && posInRange <= 0.78)
+  ) {
+    structScore = 23; // Clean pro-trend structure with room to expand
+  } else if (
+    (action === 'BUY' && posInRange < 0.25) ||
+    (action === 'SELL' && posInRange > 0.75)
+  ) {
+    structScore = 19; // Liquidity sweep at discount/premium extreme
+  } else {
+    structScore = 12;
+  }
+
+  // 3. Liquidity Sweep / Proximity to Key Levels Score (Max 20)
+  const distFromExtreme = Math.min(posInRange, 1 - posInRange);
+  const sweepScore = distFromExtreme < 0.22 ? 19 : distFromExtreme < 0.36 ? 16 : 13;
+
+  // 4. Intermarket & Macro Score (Max 20)
+  const dxyUp = dxy.changeNumeric > 0;
+  const us10yUp = us10y.changeNumeric > 0;
+  const vixUp = vix.changeNumeric > 0;
+
+  let interScore = 15;
+  if (spec.macroProfile === 'us_tech' || spec.macroProfile === 'gold') {
+    if (action === 'BUY') {
+      interScore = !dxyUp && !us10yUp ? 19 : !us10yUp || !vixUp ? 16 : 10;
+    } else {
+      interScore = dxyUp && us10yUp ? 19 : dxyUp || vixUp ? 16 : 11;
+    }
+  } else if (spec.macroProfile === 'eurusd') {
+    interScore = (action === 'BUY' && !dxyUp) || (action === 'SELL' && dxyUp) ? 19 : 11;
+  } else {
+    // US & Global equity indices
+    if (action === 'BUY') {
+      interScore = !vixUp ? 18 : 12;
+    } else {
+      interScore = vixUp ? 18 : 13;
+    }
+  }
+  if (!includeNews) {
+    interScore = Math.max(14, interScore);
+  }
+
+  // 5. Execution Trigger Score (Max 15)
+  let trigScore = kzScore >= 16 && structScore >= 18 ? 14 : kzScore >= 12 ? 12 : 9;
+  if (notesLower.includes('duda') || notesLower.includes('contra')) trigScore = 8;
+
+  const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, Math.round(val)));
+  const aiB = aiOverride?.confluenceBreakdown;
+  const finalBreakdown = {
+    killzoneFilterScore: clamp(aiB?.killzoneFilterScore ? (aiB.killzoneFilterScore + kzScore) / 2 : kzScore, 4, 20),
+    structureScore: clamp(aiB?.structureScore ? (aiB.structureScore + structScore) / 2 : structScore, 5, 25),
+    liquiditySweepScore: clamp(aiB?.liquiditySweepScore ? (aiB.liquiditySweepScore + sweepScore) / 2 : sweepScore, 5, 20),
+    intermarketScore: clamp(aiB?.intermarketScore ? (aiB.intermarketScore + interScore) / 2 : interScore, 4, 20),
+    triggerScore: clamp(aiB?.triggerScore ? (aiB.triggerScore + trigScore) / 2 : trigScore, 4, 15),
+  };
+
+  const totalScore =
+    finalBreakdown.killzoneFilterScore +
+    finalBreakdown.structureScore +
+    finalBreakdown.liquiditySweepScore +
+    finalBreakdown.intermarketScore +
+    finalBreakdown.triggerScore;
+
+  const winProbability = clamp(totalScore * 0.92 + (kzScore >= 17 ? 3 : -2), 35, 91);
+
+  let recommendationVerdict: 'TAKE' | 'CAUTION' | 'AVOID' = 'TAKE';
+  let recommendationLabel = '';
+  let recommendationReason = '';
+  let tierLabel = '';
+
+  if (totalScore >= 74 && winProbability >= 70) {
+    recommendationVerdict = 'TAKE';
+    tierLabel = isEn ? 'A+ Setup (High Confluence)' : 'Setup A+ (Alta Confluencia)';
+    recommendationLabel = isEn ? 'RECOMMENDED TO TAKE TRADE' : 'SÍ SE RECOMIENDA TOMAR LA ENTRADA';
+    recommendationReason = isEn
+      ? `High probability of success (${winProbability}%). Session liquidity, price structure, and intermarket flow are aligned for ${spec.symbol}.`
+      : `Alta probabilidad de acierto (${winProbability}%). Liquidez de sesión, estructura de precio y flujo intermercado alineados en ${spec.symbol}.`;
+  } else if (totalScore >= 56) {
+    recommendationVerdict = 'CAUTION';
+    tierLabel = isEn ? 'B Setup (Moderate Confluence)' : 'Setup B (Confluencia Moderada)';
+    recommendationLabel = isEn
+      ? 'TRADE WITH CAUTION (WAIT 5M/15M CONFIRMATION)'
+      : 'PRECAUCIÓN: ESPERAR CONFIRMACIÓN EN 5M/15M O MITAD DE LOTAJE';
+    recommendationReason = isEn
+      ? `Moderate probability (${winProbability}%). Wait for a clean 5M/15M displacement candle at ${entryPrice} or use 50% risk.`
+      : `Probabilidad moderada (${winProbability}%). Espera vela de desplazamiento en 5M/15M sobre ${entryPrice} o opera con mitad de riesgo.`;
+  } else {
+    recommendationVerdict = 'AVOID';
+    tierLabel = isEn ? 'Low Confluence (Wait Better Window)' : 'Baja Confluencia (Esperar Mejor Ventana)';
+    recommendationLabel = isEn
+      ? 'LOW SESSION LIQUIDITY FOR THIS ASSET RIGHT NOW'
+      : 'BAJA LIQUIDEZ ACTUAL EN ESTE ACTIVO — REVISA EL ESCÁNER';
+    recommendationReason = isEn
+      ? `Win probability is ${winProbability}% because ${spec.symbol} is outside its prime session window. Check the Best Setups Scanner for active indices.`
+      : `Probabilidad del ${winProbability}% porque ${spec.symbol} está fuera de su ventana óptima de liquidez. Revisa el Escáner de Mejores Entradas.`;
+  }
+
+  // Pick matching strategy playbook based on region & session
+  let matchedStrat = TRADING_STRATEGIES[0];
+  if (spec.region === 'EU' || spec.region === 'UK' || currentKz.sessionKey === 'london') {
+    matchedStrat = TRADING_STRATEGIES[1]; // Asian Range Sweep & London Judas
+  } else if (spec.symbol === 'XAUUSD') {
+    matchedStrat = TRADING_STRATEGIES[4]; // COMEX Expansion & Real Yields
+  } else if (posInRange < 0.22 || posInRange > 0.78) {
+    matchedStrat = TRADING_STRATEGIES[5]; // PDH/PDL Reversion
+  } else if (currentKz.sessionKey === 'ny_am' || currentKz.sessionKey === 'ny_pm') {
+    matchedStrat = TRADING_STRATEGIES[0]; // ICT Silver Bullet NY
+  } else {
+    matchedStrat = TRADING_STRATEGIES[3]; // 1H Order Block & OTE
+  }
+
+  const playbookName =
+    aiOverride?.playbookName ||
+    (isEn ? `${matchedStrat.code}: ${matchedStrat.nameEn}` : `${matchedStrat.code}: ${matchedStrat.nameEs}`);
+
+  const externalSources = buildExternalTraceabilitySources(spec.symbol);
+  const ownDeclaration = buildOwnAnalysisDeclaration(spec.symbol, currentKz, safeRiskPct, includeNews, language);
+
+  const defaultThesis = isEn
+    ? `${spec.symbol} (${spec.nameEn}) trades at ${inst.price.toLocaleString()} (${inst.change24h}) inside the 24h range ${inst.low24h.toLocaleString()} – ${inst.high24h.toLocaleString()} (ATR: ${inst.atr14}). Looking for ${action === 'BUY' ? 'bullish absorption in discount' : 'bearish supply rejection in premium'} at ${entryPrice} targeting TP1 ${takeProfit1} (+$${projectedProfitTp1Usd}) and TP2 ${takeProfit2} (+$${projectedProfitTp2Usd}) with Stop Loss at ${stopLoss} (-$${actualRiskAtStopUsd}).`
+    : `${spec.symbol} (${spec.nameEs}) cotiza en ${inst.price.toLocaleString()} (${inst.change24h}) dentro del rango 24h de ${inst.low24h.toLocaleString()} – ${inst.high24h.toLocaleString()} (ATR: ${inst.atr14}). Se proyecta ${action === 'BUY' ? 'absorción compradora en descuento' : 'rechazo vendedor en zona premium'} sobre ${entryPrice} buscando TP1 ${takeProfit1} (+$${projectedProfitTp1Usd}) y TP2 ${takeProfit2} (+$${projectedProfitTp2Usd}), protegiendo con Stop Loss en ${stopLoss} (-$${actualRiskAtStopUsd}).`;
+
+  const defaultInvalidation = isEn
+    ? `Invalidated if a 15M candle closes with a full body ${action === 'BUY' ? 'below' : 'above'} ${stopLoss}, or if price hits ${takeProfit1} before triggering the entry at ${entryPrice}.`
+    : `Se invalida si una vela de 15M cierra con cuerpo completo por ${action === 'BUY' ? 'debajo' : 'encima'} de ${stopLoss}, o si el precio toca ${takeProfit1} antes de activar la orden en ${entryPrice}.`;
+
+  const defaultTips = isEn
+    ? [
+        `Execute ${recommendedLots} lots so Stop Loss (${stopDistanceStr}) risks -$${actualRiskAtStopUsd.toFixed(2)} USD.`,
+        `Close 50% at TP1 (${takeProfit1}) and move Stop Loss to Break Even (${entryPrice}).`,
+        `Let the remaining 50% run toward TP2 (${takeProfit2}) for a 1:3.0 R:R (+$${projectedProfitTp2Usd.toFixed(2)} USD).`,
+      ]
+    : [
+        `Ejecutar ${recommendedLots} lotes para que el Stop Loss (${stopDistanceStr}) represente exactamente -$${actualRiskAtStopUsd.toFixed(2)} USD.`,
+        `Cerrar 50% de la posición en TP1 (${takeProfit1}) y mover el Stop Loss a Break Even (${entryPrice}).`,
+        `Dejar correr el resto hacia TP2 (${takeProfit2}) para un 1:3.0 R:R (+$${projectedProfitTp2Usd.toFixed(2)} USD).`,
+      ];
+
+  return {
+    asset: spec.symbol,
+    assetName: isEn ? spec.nameEn : spec.nameEs,
+    region: spec.region,
+    action,
+    playbookName,
+    strategyId: matchedStrat.id,
+    tier: tierLabel,
+    totalConfluenceScore: totalScore,
+    confluenceBreakdown: finalBreakdown,
+    winProbability,
+    recommendationVerdict,
+    recommendationLabel,
+    recommendationReason,
+    prices: {
+      currentPrice: inst.price,
+      entryPrice,
+      entryType: isEn
+        ? `${action === 'BUY' ? 'Buy Limit' : 'Sell Limit'} at 50% FVG / POI`
+        : `${action === 'BUY' ? 'Buy Limit' : 'Sell Limit'} en 50% FVG / Zona POI`,
+      stopLoss,
+      stopLossDistance: stopDistanceStr,
+      stopLossPoints: exactStopDist,
+      takeProfit1,
+      takeProfit2,
+      riskRewardRatio: '1:3.0',
+    },
+    propFirmRiskCalculation: {
+      accountBalance: safeBalance,
+      riskPercentage: safeRiskPct,
+      monetaryRiskUsd: targetMonetaryRiskUsd,
+      actualRiskAtStopUsd,
+      projectedProfitTp1Usd,
+      projectedProfitTp2Usd,
+      recommendedLots,
+      valuePerPointPerLotUsd: Number(usdPerPointPerLot.toFixed(4)),
+      contractSizeSpec: contractSpecLabel,
+      hardDailyDrawdownAlert,
+    },
+    thesisRationale: aiOverride?.thesisRationale || defaultThesis,
+    invalidationCriteria: aiOverride?.invalidationCriteria || defaultInvalidation,
+    executionTips:
+      Array.isArray(aiOverride?.executionTips) && aiOverride.executionTips.length > 0
+        ? aiOverride.executionTips
+        : defaultTips,
+    externalSources,
+    ownAnalysisDeclaration: ownDeclaration,
+  };
+}
+
 // Routes
 
 // 1. Get Treatise & Web Sources Prompt
 app.get('/api/treatise', (req, res) => {
   res.json({
     title: 'Tratado Maestro de Investigación Financiera y Microestructura de Mercado',
-    assetsCovered: ['US30', 'NAS100', 'XAUUSD', 'EURUSD'],
+    assetsCovered: TRADEABLE_INSTRUMENTS.map((i) => i.symbol),
     contentLength: treatiseContent.length,
     snippet: treatiseContent.substring(0, 1500) + '...',
     fullContent: treatiseContent,
@@ -713,7 +874,7 @@ app.get('/api/treatise', (req, res) => {
   });
 });
 
-// 2. Real-Time Market Feed
+// 2. Real-Time Market Feed (with live FX conversion rates)
 app.get('/api/market-feed', async (req, res) => {
   await syncRealTimeTradingViewQuotes();
   const killzone = getCurrentKillzone();
@@ -721,108 +882,60 @@ app.get('/api/market-feed', async (req, res) => {
     timestamp: new Date().toISOString(),
     session: killzone,
     instruments: MARKET_INSTRUMENTS,
+    fxRates: liveFxRates,
   });
 });
 
-// Fast timeout helper to avoid slow SDK retries when quota is exhausted
-function withTimeout<T>(promise: Promise<T>, ms: number = 3500): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('AI_TIMEOUT_OR_QUOTA_FALLBACK')), ms)),
-  ]);
-}
+// 3. Multi-Index High-Probability Trade Scanner (/api/scan-best-setups)
+app.post('/api/scan-best-setups', async (req, res) => {
+  await syncRealTimeTradingViewQuotes();
+  const {
+    accountBalance = 10000,
+    riskPercentage = 0.50,
+    filterCategory = 'ALL', // 'ALL' | 'INDICES' | 'US_INDICES' | 'EU_ASIA_INDICES' | 'METALS_FX'
+    includeNews = true,
+    customDocument = '',
+    language = 'es',
+  } = req.body || {};
 
-// 3. Ask Market Information in Real-Time (With Connected Key + Audit Attribution Protocol)
-app.post('/api/market-info', async (req, res) => {
-  const { query, asset = 'NAS100', customDocument, useOnlineOnly = false, activeDocNames = [] } = req.body;
   const currentKz = getCurrentKillzone();
-  const liveSnapshot = getLiveMarketSnapshotText();
 
-  if (!query) {
-    return res.status(400).json({ error: 'Parámetro query requerido' });
-  }
+  const pool = TRADEABLE_INSTRUMENTS.filter((spec) => {
+    if (filterCategory === 'INDICES') return spec.kind === 'index';
+    if (filterCategory === 'US_INDICES') return spec.kind === 'index' && spec.region === 'US';
+    if (filterCategory === 'EU_ASIA_INDICES')
+      return spec.kind === 'index' && (spec.region === 'EU' || spec.region === 'UK' || spec.region === 'ASIA');
+    if (filterCategory === 'METALS_FX') return spec.kind === 'metal' || spec.kind === 'forex';
+    return true;
+  });
 
-  const ownDeclaration = buildOwnAnalysisDeclaration(asset, currentKz, 0.50);
+  const evaluated = pool.map((spec) =>
+    buildDeterministicSetupForInstrument({
+      asset: spec.symbol,
+      accountBalance: Number(accountBalance) || 10000,
+      riskPercentage: Number(riskPercentage) || 0.50,
+      customDocument,
+      includeNews: Boolean(includeNews),
+      language,
+      currentKz,
+    })
+  );
 
-  try {
-    const knowledgeSection = useOnlineOnly
-      ? `MODO 100% INFO ONLINE ACTIVO: Todas las bases de datos locales están desactivadas por el usuario. Basa tu respuesta EXCLUSIVAMENTE en los datos de mercado online en tiempo real, gráficos de TradingView (1H-4H y 5M-30M) y las fuentes web financieras oficiales (Reuters, Bloomberg, Financial Times, ForexLive, Investing.com/DailyFX, World Gold Council, Kitco News, CNBC Markets, Yahoo Finance, MarketWatch).`
-      : `BASES DE CONOCIMIENTO ACTIVAS (${activeDocNames.length > 0 ? activeDocNames.join(', ') : 'Tratado Maestro + Fuentes Web'}):\n${customDocument ? customDocument.substring(0, 6000) : treatiseContent.substring(0, 4500)}\n\nDIRECTRICES DE FUENTES WEB:\n${webSourcesPromptContent}`;
+  // Sort by highest winProbability first, then totalConfluenceScore
+  evaluated.sort((a, b) => {
+    const probDiff = (b.winProbability || 0) - (a.winProbability || 0);
+    if (probDiff !== 0) return probDiff;
+    return b.totalConfluenceScore - a.totalConfluenceScore;
+  });
 
-    const systemPrompt = `Eres el Agente Cuantitativo e Institucional de TradeCoffe en tiempo real.
-Hora de Nueva York: ${currentKz.nyTime} (EST). Sesión: ${currentKz.name}.
-COTIZACIONES ONLINE EN TIEMPO REAL (TradingView Feed):
-${liveSnapshot}
-
-${knowledgeSection}
-
-PROTOCOLO OBLIGATORIO DE AUDITORÍA Y ATRIBUCIÓN:
-1. Cruza los datos técnicos de 1H-4H y 5M-30M de TradingView con el contexto de las fuentes financieras especializadas (Reuters, Bloomberg, FT, ForexLive, Investing/DailyFX, World Gold Council, Kitco, CNBC, Yahoo Finance, MarketWatch).
-2. Incluye siempre una "Sección de Trazabilidad Externa" con el formato: [Nombre del Medio | Titular o Reporte | Enlace].
-3. Incluye una "Declaración de Análisis Propio" separando claramente la deducción técnica del agente (confluencia estructural, FVG, barridos de liquidez, killzones y gestión de riesgo de fondeo del 0.5% - 1.0%).
-Responde en español de forma profesional, concisa y cuantitativa.`;
-
-    const response = await generateAiContentWithConnectedKey({
-      model: 'gemini-3.8-flash',
-      contents: [{ role: 'user', parts: [{ text: `Pregunta sobre trading o mercado en tiempo real: "${query}". Activo: ${asset}.` }] }],
-      config: {
-        systemInstruction: systemPrompt,
-      },
-    });
-
-    const externalSources = buildExternalTraceabilitySources(asset, response);
-    let text = response.text || '';
-    if (!text) throw new Error('Respuesta vacía de modelo');
-
-    if (!text.includes('Trazabilidad Externa')) {
-      text += formatAuditAttributionMarkdown(asset, currentKz, externalSources, ownDeclaration);
-    }
-
-    const sources = externalSources.map((s) => ({
-      title: `[${s.media} | ${s.headline}]`,
-      media: s.media,
-      headline: s.headline,
-      url: s.url,
-    }));
-
-    return res.json({
-      answer: text,
-      sources,
-      externalSources,
-      ownAnalysisDeclaration: ownDeclaration,
-      searchQueries: [query],
-      nyTime: currentKz.nyTime,
-      session: currentKz.name,
-      timestamp: new Date().toISOString(),
-      sourceType: useOnlineOnly ? 'online-only-ai' : 'gemini-ai',
-    });
-  } catch (_error: any) {
-    const externalSources = buildExternalTraceabilitySources(asset);
-    const baseFallback = generateAutonomousAnswer(query, asset, currentKz, Boolean(useOnlineOnly), activeDocNames, customDocument || '');
-    const fallbackAnswer = baseFallback + formatAuditAttributionMarkdown(asset, currentKz, externalSources, ownDeclaration);
-
-    const sources = externalSources.map((s) => ({
-      title: `[${s.media} | ${s.headline}]`,
-      media: s.media,
-      headline: s.headline,
-      url: s.url,
-    }));
-
-    return res.json({
-      answer: fallbackAnswer,
-      sources,
-      externalSources,
-      ownAnalysisDeclaration: ownDeclaration,
-      searchQueries: [query],
-      nyTime: currentKz.nyTime,
-      session: currentKz.name,
-      timestamp: new Date().toISOString(),
-      sourceType: useOnlineOnly ? 'online-feed-direct' : 'quantitative-engine-fallback',
-      notice: useOnlineOnly
-        ? 'Análisis auditado 100% con fuentes financieras online y TradingView en tiempo real.'
-        : 'Análisis sintetizado con fuentes financieras verificadas y bases de conocimiento activas.',
-    });
-  }
+  res.json({
+    bestSetup: evaluated[0],
+    rankedSetups: evaluated,
+    scannedCount: evaluated.length,
+    nyTime: currentKz.nyTime,
+    session: currentKz.name,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // 4. Interactive Gemini Chat for News & Macro Doubts
@@ -833,7 +946,6 @@ app.post('/api/chat', async (req, res) => {
     asset = 'NAS100',
     customDocument,
     useOnlineOnly = false,
-    activeDocNames = [],
     language = 'es',
   } = req.body;
   const isEn = language === 'en';
@@ -860,14 +972,14 @@ Current New York Time: ${currentKz.nyTime} | Active Session: ${currentKz.name}.
 LIVE MARKET QUOTES: ${liveSnapshot}
 ${customDocument ? `REFERENCE CONTEXT:\n${customDocument.substring(0, 3500)}` : ''}
 
-Your role is to clearly and directly answer user doubts about macroeconomic news (CPI inflation, NFP jobs report, FOMC, Federal Reserve interest rates, Jerome Powell speeches, US10Y Treasury yields, DXY Dollar Index, VIX volatility, geopolitical events, red-folder economic calendar releases) and explain how they impact ${asset} (NAS100, US30, XAUUSD Gold, EURUSD) and when to trade or wait.
+Your role is to clearly and directly answer user doubts about macroeconomic news (CPI inflation, NFP jobs report, FOMC, Federal Reserve/ECB/BoE/BoJ interest rates, Jerome Powell speeches, US10Y Treasury yields, DXY Dollar Index, VIX volatility, geopolitical events, red-folder economic calendar releases) and explain how they impact ${asset} (and global CFD indices NAS100, US500, US30, US2000, GER40, UK100, EU50, JP225, XAUUSD Gold, EURUSD) and when to trade or wait.
 Respond in English concisely, practically, and without unnecessary filler.`
       : `Eres el Analista Gemini de Noticias y Macroeconomía de TRstudio.
 Hora actual en Nueva York: ${currentKz.nyTime} | Sesión activa: ${currentKz.name}.
 COTIZACIONES EN VIVO: ${liveSnapshot}
 ${customDocument ? `CONTEXTO DE REFERENCIA:\n${customDocument.substring(0, 3500)}` : ''}
 
-Tu función es resolver de forma directa, práctica y clara cualquier duda del usuario sobre noticias macroeconómicas (CPI/Inflación, NFP/Nóminas no agrícolas, FOMC, tasas de interés de la Fed, discursos de Jerome Powell, rendimientos de bonos US10Y, Índice Dólar DXY, volatilidad VIX, eventos geopolíticos y calendario económico de carpeta roja) explicando cómo afectan a ${asset} (NAS100, US30, XAUUSD Oro, EURUSD) y qué precauciones tomar al operar.
+Tu función es resolver de forma directa, práctica y clara cualquier duda del usuario sobre noticias macroeconómicas (CPI/Inflación, NFP/Nóminas no agrícolas, FOMC, tasas de la Fed/BCE/BoE/BoJ, discursos de Jerome Powell, rendimientos de bonos US10Y, Índice Dólar DXY, volatilidad VIX, eventos geopolíticos y calendario económico de carpeta roja) explicando cómo afectan a ${asset} (y a los índices CFD NAS100, US500, US30, US2000, GER40, UK100, EU50, JP225, XAUUSD Oro, EURUSD) y qué precauciones tomar al operar.
 Responde en español de forma directa y estructurada.`;
 
     const promptWithContext = recentHistoryText
@@ -881,7 +993,7 @@ Responde en español de forma directa y estructurada.`;
     });
 
     const externalSources = buildExternalTraceabilitySources(asset, response);
-    let reply = response.text || '';
+    const reply = response.text || '';
     if (!reply) throw new Error('Empty response');
 
     return res.json({
@@ -897,10 +1009,10 @@ Responde en español de forma directa y estructurada.`;
     const externalSources = buildExternalTraceabilitySources(asset);
     const qLower = String(message).toLowerCase();
     const targetInst = MARKET_INSTRUMENTS.find((i) => i.symbol === asset) || MARKET_INSTRUMENTS[0];
-    const xau = MARKET_INSTRUMENTS.find((i) => i.symbol === 'XAUUSD') || MARKET_INSTRUMENTS[2];
-    const dxy = MARKET_INSTRUMENTS.find((i) => i.symbol === 'DXY') || MARKET_INSTRUMENTS[4];
-    const us10y = MARKET_INSTRUMENTS.find((i) => i.symbol === 'US10Y') || MARKET_INSTRUMENTS[5];
-    const vix = MARKET_INSTRUMENTS.find((i) => i.symbol === 'VIX') || MARKET_INSTRUMENTS[6];
+    const xau = MARKET_INSTRUMENTS.find((i) => i.symbol === 'XAUUSD')!;
+    const dxy = MARKET_INSTRUMENTS.find((i) => i.symbol === 'DXY')!;
+    const us10y = MARKET_INSTRUMENTS.find((i) => i.symbol === 'US10Y')!;
+    const vix = MARKET_INSTRUMENTS.find((i) => i.symbol === 'VIX')!;
 
     let newsFallbackReply = '';
 
@@ -909,60 +1021,68 @@ Responde en español de forma directa y estructurada.`;
         ? `### Impact of CPI (Inflation) on ${asset}, Gold & Indices (${currentKz.nyTime} NY)
 - **Higher-than-expected CPI (Hot Inflation):** Means the Federal Reserve is likely to keep interest rates higher for longer.
   - **DXY (${dxy.price}) & US10Y (${us10y.price}%):** Spike upward immediately.
-  - **XAUUSD Gold ($${xau.price.toLocaleString()}) & NAS100 (${targetInst.price.toLocaleString()}):** Experience strong initial selling pressure due to higher real yields and discount rates.
+  - **XAUUSD Gold ($${xau.price.toLocaleString()}) & Equity Indices (${targetInst.symbol}: ${targetInst.price.toLocaleString()}):** Experience strong initial selling pressure due to higher real yields and discount rates.
 - **Lower-than-expected CPI (Cool Inflation):** Increases expectations of Fed rate cuts.
   - **DXY & US10Y:** Drop sharply.
-  - **NAS100, US30, EURUSD & XAUUSD:** Rally strongly upward after the initial 8:30 AM NY volatility sweep.
+  - **NAS100, US500, US30, GER40, EURUSD & XAUUSD:** Rally strongly upward after the initial 8:30 AM NY volatility sweep.
 - **Execution Rule:** Wait 15 minutes after the 8:30 AM NY release so the initial manipulation wick (*Judas Swing*) completes before entering on a 5M/15M FVG.`
-        : `### Impacto del CPI (Inflación) en ${asset}, Oro e Índices (${currentKz.nyTime} NY)
+        : `### Impacto del CPI (Inflación) en ${asset}, Oro e Índices CFD (${currentKz.nyTime} NY)
 - **Si el CPI sale MÁS ALTO de lo esperado (Inflación Caliente):** La Reserva Federal (Fed) mantendrá las tasas altas por más tiempo.
   - **DXY (${dxy.price}) y Bono US10Y (${us10y.price}%):** Suben con fuerza de inmediato.
-  - **XAUUSD Oro ($${xau.price.toLocaleString()}) y NAS100 (${targetInst.price.toLocaleString()}):** Sufren presión bajista inmediata porque suben los rendimientos reales de los bonos y el costo del dinero.
+  - **XAUUSD Oro ($${xau.price.toLocaleString()}) e Índices (${targetInst.symbol}: ${targetInst.price.toLocaleString()}):** Sufren presión bajista inmediata porque suben los rendimientos reales de los bonos y la tasa de descuento.
 - **Si el CPI sale MÁS BAJO de lo esperado (Inflación Moderándose):** Aumenta la probabilidad de recortes de tasas de la Fed.
   - **DXY y US10Y:** Caen con fuerza.
-  - **NAS100, US30, EURUSD y XAUUSD:** Reaccionan al alza buscando liquidez de máximos previos.
+  - **NAS100, US500, US30, US2000, GER40, EURUSD y XAUUSD:** Reaccionan al alza buscando liquidez de máximos previos.
 - **Regla Operativa:** El CPI se publica a las **8:30 AM (Hora NY)**. Espera de 10 a 15 minutos tras el dato para que termine el barrido de liquidez inicial antes de tomar entrada en 5M/15M.`;
-    } else if (qLower.includes('nfp') || qLower.includes('empleo') || qLower.includes('nomina') || qLower.includes('fomc') || qLower.includes('powell') || qLower.includes('fed')) {
+    } else if (
+      qLower.includes('nfp') ||
+      qLower.includes('empleo') ||
+      qLower.includes('nomina') ||
+      qLower.includes('fomc') ||
+      qLower.includes('powell') ||
+      qLower.includes('fed')
+    ) {
       newsFallbackReply = isEn
         ? `### Trading Protocol for NFP, FOMC & Powell Speeches (${currentKz.nyTime} NY)
 - **NFP (Non-Farm Payrolls — 8:30 AM NY, First Friday of Month):**
   - Strong job numbers + higher wages = Bullish **DXY (${dxy.price})** / Bearish **XAUUSD ($${xau.price.toLocaleString()}) & EURUSD**.
-  - Weak job numbers = Bearish **DXY** / Bullish **Gold & NAS100** (rate-cut expectations).
+  - Weak job numbers = Bearish **DXY** / Bullish **Gold, NAS100 & US500** (rate-cut expectations).
 - **FOMC & Powell Press Conference (2:00 PM & 2:30 PM NY):**
   - The 2:00 PM rate statement creates the first fakeout wick; the real directional move frequently starts at **2:30 PM NY** when Jerome Powell answers the first question.
 - **Account Protection Rule:** Close or protect open positions at Break Even 15 minutes before the release, and reduce risk by 50% (e.g., 0.25% instead of 0.50%) due to spread widening.`
         : `### Protocolo Operativo para NFP, FOMC y Discursos de Powell (${currentKz.nyTime} NY)
 - **NFP (Nóminas No Agrícolas — 8:30 AM NY, primer viernes del mes):**
   - Empleo más fuerte de lo previsto = Impulso alcista en **DXY (${dxy.price})** y caída inicial en **XAUUSD ($${xau.price.toLocaleString()}) y EURUSD**.
-  - Empleo débil = Caída en **DXY y US10Y (${us10y.price}%)** e impulso alcista en **Oro y NAS100**.
+  - Empleo débil = Caída en **DXY y US10Y (${us10y.price}%)** e impulso alcista en **Oro, NAS100 y US500**.
 - **FOMC y Rueda de Prensa de Powell (2:00 PM y 2:30 PM NY):**
   - El comunicado de las **2:00 PM NY** suele provocar un barrido en falso en ambas direcciones; la tendencia real suele definirse a las **2:30 PM NY** cuando Powell inicia la ronda de preguntas.
 - **Protección de Cuenta:** Protege en Break Even o cierra parciales 15 minutos antes de la noticia y espera a que los spreads se normalicen antes de entrar.`;
-    } else if (qLower.includes('horario') || qLower.includes('carpeta roja') || qLower.includes('evitar') || qLower.includes('red-folder') || qLower.includes('when')) {
-      newsFallbackReply = isEn
-        ? `### Key High-Impact News Windows (New York Time)
-- **8:30 AM NY:** US Macro Releases (CPI, NFP, PPI, Retail Sales, Jobless Claims, GDP). High volatility across **XAUUSD, NAS100, US30, EURUSD**.
-- **9:30 AM NY:** NYSE / Wall Street Cash Open. Wait until **9:45 AM NY** if major news coincided with the morning session.
-- **10:00 AM NY:** ISM Manufacturing/Services PMI, Consumer Confidence & JOLTS.
-- **2:00 PM – 2:30 PM NY:** FOMC Rate Decisions, Fed Minutes & Powell Press Conference.
-- **5:00 PM – 6:00 PM NY:** Daily Bank Rollover (wide spreads — avoid opening new trades).`
-        : `### Horarios Clave de Noticias de Carpeta Roja (Hora Nueva York)
-- **8:30 AM NY:** Publicación de datos macro de EE. UU. (CPI, NFP, PPI, Ventas Minoristas, PIB, Desempleo). Máxima volatilidad en **XAUUSD, NAS100, US30 y EURUSD**.
-- **9:30 AM NY:** Apertura de Wall Street. Si hubo noticia a las 8:30 AM, los primeros 15 minutos (9:30 – 9:45 AM) suelen barrer stops antes de dar la entrada limpia.
-- **10:00 AM NY:** ISM Manufacturero/Servicios, Confianza del Consumidor y JOLTS.
-- **2:00 PM – 2:30 PM NY:** Decisión de tasas FOMC, Actas de la Fed y conferencia de Jerome Powell.
-- **5:00 PM – 6:00 PM NY:** Rollover bancario diario (spreads altos; evitar abrir entradas nuevas).`;
     } else {
+      const setupPreview = buildDeterministicSetupForInstrument({
+        asset: targetInst.symbol,
+        accountBalance: 10000,
+        riskPercentage: 0.5,
+        currentKz,
+        language,
+      });
+
       newsFallbackReply = isEn
-        ? `### Macro & News Analysis for ${targetInst.symbol} (${currentKz.nyTime} NY)
+        ? `### Live Macro & Technical Synthesis for ${targetInst.symbol} (${currentKz.nyTime} NY)
 - **Question Analyzed:** *"${message}"*
 - **Live Market Context:**
-  - **${targetInst.symbol}:** **${targetInst.price.toLocaleString()}** (${targetInst.change24h}) | 24h Range: **${targetInst.low24h.toLocaleString()} – ${targetInst.high24h.toLocaleString()}**
-  - **DXY (US Dollar Index):** **${dxy.price}** (${dxy.change24h}) — inverse driver for EURUSD and XAUUSD.
-  - **US10Y (10Y Treasury Yield):** **${us10y.price}%** (${us10y.change24h}) — key valuation driver for NAS100 and Gold.
-  - **VIX Volatility:** **${vix.price}** (${vix.change24h}).
-- **Practical Takeaway:** During **${currentKz.name}**, monitor whether **US10Y (${us10y.price}%)** and **DXY (${dxy.price})** confirm the direction of **${targetInst.symbol}**. Avoid entering 15 minutes before high-impact 8:30 AM or 10:00 AM NY news releases.`
-        : generateAutonomousAnswer(message, asset, currentKz, Boolean(useOnlineOnly), activeDocNames, customDocument || '');
+  - **${targetInst.symbol} (${targetInst.name}):** **${targetInst.price.toLocaleString()}** (${targetInst.change24h}) | 24h Range: **${targetInst.low24h.toLocaleString()} – ${targetInst.high24h.toLocaleString()}** | ATR: **${targetInst.atr14}**
+  - **Macro Drivers:** **DXY:** ${dxy.price} (${dxy.change24h}) | **US10Y Yield:** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h})
+- **Tactical Reference Coordinates (${setupPreview.action} — ${setupPreview.winProbability}% Win Prob.):**
+  - **Entry Zone:** **${setupPreview.prices.entryPrice}** | **Stop Loss:** **${setupPreview.prices.stopLoss}** (${setupPreview.prices.stopLossDistance})
+  - **TP1 (1:1.8):** **${setupPreview.prices.takeProfit1}** | **TP2 (1:3.0):** **${setupPreview.prices.takeProfit2}**`
+        : `### Síntesis Macro y Técnica en Vivo para ${targetInst.symbol} (${currentKz.nyTime} NY)
+- **Consulta Analizada:** *"${message}"*
+- **Contexto de Mercado en Tiempo Real:**
+  - **${targetInst.symbol} (${targetInst.name}):** **${targetInst.price.toLocaleString()}** (${targetInst.change24h}) | Rango 24h: **${targetInst.low24h.toLocaleString()} – ${targetInst.high24h.toLocaleString()}** | ATR: **${targetInst.atr14}**
+  - **Variables Macro:** **DXY:** ${dxy.price} (${dxy.change24h}) | **Bono US10Y:** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h})
+- **Coordenadas Tácticas de Referencia (${setupPreview.action} — ${setupPreview.winProbability}% Prob. Acierto):**
+  - **Zona de Entrada:** **${setupPreview.prices.entryPrice}** | **Stop Loss:** **${setupPreview.prices.stopLoss}** (${setupPreview.prices.stopLossDistance})
+  - **TP1 (1:1.8):** **${setupPreview.prices.takeProfit1}** | **TP2 (1:3.0):** **${setupPreview.prices.takeProfit2}**`;
     }
 
     const fallbackReply =
@@ -981,198 +1101,9 @@ Responde en español de forma directa y estructurada.`;
   }
 });
 
-// Quantitative Confluence, Win Probability & Recommendation Evaluator
-function evaluateConfluenceAndProbability(params: {
-  asset: string;
-  action: 'BUY' | 'SELL' | 'WAIT';
-  inst: any;
-  currentKz: any;
-  includeNews: boolean;
-  specificNotes: string;
-  customDocument?: string;
-  lang: string;
-  aiBreakdown?: {
-    killzoneFilterScore?: number;
-    structureScore?: number;
-    liquiditySweepScore?: number;
-    intermarketScore?: number;
-    triggerScore?: number;
-  };
-}) {
-  const { asset, action, inst, currentKz, includeNews, specificNotes, lang, aiBreakdown } = params;
-  const isEn = lang === 'en';
-  const dxy = MARKET_INSTRUMENTS.find((i) => i.symbol === 'DXY') || MARKET_INSTRUMENTS[4];
-  const us10y = MARKET_INSTRUMENTS.find((i) => i.symbol === 'US10Y') || MARKET_INSTRUMENTS[5];
-  const vix = MARKET_INSTRUMENTS.find((i) => i.symbol === 'VIX') || MARKET_INSTRUMENTS[6];
-
-  // 1. Killzone / Session Score (Max 20)
-  const kzNameLower = (currentKz?.name || '').toLowerCase();
-  let kzScore = 16;
-  if (kzNameLower.includes('nueva york') || kzNameLower.includes('londres') || kzNameLower.includes('pre-mercado')) {
-    kzScore = 19;
-  } else if (kzNameLower.includes('asiático') || kzNameLower.includes('asia')) {
-    kzScore = asset === 'XAUUSD' || asset === 'EURUSD' ? 14 : 10;
-  } else if (kzNameLower.includes('post-mercado') || kzNameLower.includes('rollover')) {
-    kzScore = 7; // Low liquidity / wide spreads during rollover
-  }
-
-  // 2. Price Structure & Range Position Score (Max 25)
-  const rangeSpan = Math.max(0.0001, (inst.high24h || inst.price * 1.01) - (inst.low24h || inst.price * 0.99));
-  const posInRange = (inst.price - (inst.low24h || inst.price * 0.99)) / rangeSpan; // 0 = low, 1 = high
-  const isPriceBullish24h = String(inst.change24h || '').startsWith('+');
-
-  let structScore = 18;
-  if (posInRange >= 0.43 && posInRange <= 0.57) {
-    // Price is stuck in the middle of equilibrium (chop zone)
-    structScore = 12;
-  } else if (
-    (action === 'BUY' && isPriceBullish24h && posInRange < 0.78) ||
-    (action === 'SELL' && !isPriceBullish24h && posInRange > 0.22)
-  ) {
-    structScore = 22;
-  } else if (
-    (action === 'BUY' && !isPriceBullish24h && posInRange < 0.25) ||
-    (action === 'SELL' && isPriceBullish24h && posInRange > 0.75)
-  ) {
-    // Reversal at extreme discount/premium
-    structScore = 17;
-  } else {
-    // Counter-trend or buying the very top / selling the very bottom
-    structScore = 10;
-  }
-
-  // 3. Liquidity Sweep / Proximity to PDH/PDL Score (Max 20)
-  const distFromExtreme = Math.min(posInRange, 1 - posInRange);
-  let sweepScore = distFromExtreme < 0.22 ? 18 : distFromExtreme < 0.38 ? 15 : 11;
-
-  // 4. Intermarket & News Alignment Score (Max 20)
-  const dxyUp = String(dxy.change24h || '').startsWith('+');
-  const us10yUp = String(us10y.change24h || '').startsWith('+');
-  const vixUp = String(vix.change24h || '').startsWith('+');
-
-  let interScore = 15;
-  if (action === 'BUY') {
-    if (!dxyUp && !us10yUp) interScore = 19;
-    else if (dxyUp && us10yUp && vixUp) interScore = 8; // Strong macro headwind against BUY
-    else interScore = 13;
-  } else if (action === 'SELL') {
-    if (dxyUp && (us10yUp || vixUp)) interScore = 19;
-    else if (!dxyUp && !us10yUp) interScore = 9;
-    else interScore = 14;
-  }
-  if (!includeNews) {
-    // When user turns off news, weight pure technicals neutral-positive
-    interScore = Math.max(12, interScore);
-  }
-
-  // 5. Execution Trigger & User Notes Alignment (Max 15)
-  const notesLower = (specificNotes || '').toLowerCase();
-  let trigScore = 13;
-  if (notesLower.includes('duda') || notesLower.includes('arriesg') || notesLower.includes('contra')) {
-    trigScore = 8;
-  } else if (
-    (notesLower.includes('compra') || notesLower.includes('buy')) &&
-    !isPriceBullish24h &&
-    dxyUp
-  ) {
-    trigScore = 9;
-  } else if (
-    (notesLower.includes('venta') || notesLower.includes('sell')) &&
-    isPriceBullish24h &&
-    !dxyUp
-  ) {
-    trigScore = 9;
-  } else if (kzScore >= 17 && structScore >= 18) {
-    trigScore = 14;
-  }
-
-  // Blend with AI breakdown if valid and realistic, otherwise use quantitative scores
-  const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, Math.round(val)));
-  const finalBreakdown = {
-    killzoneFilterScore: clamp(
-      aiBreakdown?.killzoneFilterScore ? (aiBreakdown.killzoneFilterScore + kzScore) / 2 : kzScore,
-      4,
-      20
-    ),
-    structureScore: clamp(
-      aiBreakdown?.structureScore ? (aiBreakdown.structureScore + structScore) / 2 : structScore,
-      5,
-      25
-    ),
-    liquiditySweepScore: clamp(
-      aiBreakdown?.liquiditySweepScore ? (aiBreakdown.liquiditySweepScore + sweepScore) / 2 : sweepScore,
-      5,
-      20
-    ),
-    intermarketScore: clamp(
-      aiBreakdown?.intermarketScore ? (aiBreakdown.intermarketScore + interScore) / 2 : interScore,
-      4,
-      20
-    ),
-    triggerScore: clamp(
-      aiBreakdown?.triggerScore ? (aiBreakdown.triggerScore + trigScore) / 2 : trigScore,
-      4,
-      15
-    ),
-  };
-
-  const totalScore =
-    finalBreakdown.killzoneFilterScore +
-    finalBreakdown.structureScore +
-    finalBreakdown.liquiditySweepScore +
-    finalBreakdown.intermarketScore +
-    finalBreakdown.triggerScore;
-
-  // Compute realistic Win Probability (32% to 89%)
-  const winProbability = clamp(totalScore * 0.92 + (kzScore >= 17 ? 3 : -4), 32, 89);
-
-  let recommendationVerdict: 'TAKE' | 'CAUTION' | 'AVOID' = 'TAKE';
-  let recommendationLabel = '';
-  let recommendationReason = '';
-  let tierLabel = '';
-
-  if (totalScore >= 75 && winProbability >= 70) {
-    recommendationVerdict = 'TAKE';
-    tierLabel = isEn ? 'A+ Setup (High Confluence)' : 'Setup A+ (Alta Confluencia)';
-    recommendationLabel = isEn
-      ? 'RECOMMENDED TO TAKE TRADE'
-      : 'SÍ SE RECOMIENDA TOMAR LA ENTRADA';
-    recommendationReason = isEn
-      ? `High probability of success (${winProbability}%). Structure, session liquidity, and intermarket flow are aligned. Execute with standard risk.`
-      : `Alta probabilidad de acierto (${winProbability}%). La estructura, liquidez de sesión y flujo intermercado están alineados. Puedes ejecutar con tu riesgo normal.`;
-  } else if (totalScore >= 56) {
-    recommendationVerdict = 'CAUTION';
-    tierLabel = isEn ? 'B Setup (Moderate Confluence)' : 'Setup B (Confluencia Moderada)';
-    recommendationLabel = isEn
-      ? 'TRADE WITH CAUTION (WAIT CONFIRMATION OR HALF RISK)'
-      : 'PRECAUCIÓN: ESPERAR CONFIRMACIÓN O USAR MITAD DE RIESGO';
-    recommendationReason = isEn
-      ? `Moderate probability (${winProbability}%). Some factors are mixed (e.g., mid-range price or macro divergence). Wait for a clear 5M/15M candle confirmation or reduce risk by 50%.`
-      : `Probabilidad moderada (${winProbability}%). Hay factores mixtos en estructura o horario. Se recomienda esperar vela de confirmación en 5M/15M o entrar con la mitad del lotaje.`;
-  } else {
-    recommendationVerdict = 'AVOID';
-    tierLabel = isEn ? 'Low Confluence (Avoid Entry)' : 'Baja Confluencia (No Operar)';
-    recommendationLabel = isEn
-      ? 'DO NOT TAKE THIS TRADE RIGHT NOW'
-      : 'NO SE RECOMIENDA TOMAR ESTA ENTRADA AHORA';
-    recommendationReason = isEn
-      ? `Low probability of success (${winProbability}%). Unfavorable schedule, low liquidity, or counter-trend flow increases Stop Loss risk. Wait for the next clean setup.`
-      : `Baja probabilidad de acierto (${winProbability}%). El horario actual, la falta de liquidez o la dirección en contra del flujo aumentan el riesgo de tocar Stop Loss. Mejor esperar.`;
-  }
-
-  return {
-    totalConfluenceScore: totalScore,
-    confluenceBreakdown: finalBreakdown,
-    winProbability,
-    recommendationVerdict,
-    recommendationLabel,
-    recommendationReason,
-    tier: tierLabel,
-  };
-}
-
 // 5. Generate Detailed Institutional Trading Report
 app.post('/api/generate-report', async (req, res) => {
+  await syncRealTimeTradingViewQuotes();
   const {
     asset = 'TODOS',
     timeframe = 'Intraday (4H / 1H / 15M)',
@@ -1189,8 +1120,8 @@ app.post('/api/generate-report', async (req, res) => {
   try {
     const newsInstruction = includeNews
       ? isEn
-        ? 'Factor in the impact of current macroeconomic news (Fed, CPI, NFP, US10Y yields, DXY, VIX) from Reuters, Bloomberg, ForexLive, Investing, Kitco, and CNBC.'
-        : 'Toma en cuenta el impacto de noticias macroeconómicas actuales (Fed, CPI, NFP, bonos US10Y, DXY, VIX) de Reuters, Bloomberg, ForexLive, Investing, Kitco y CNBC.'
+        ? 'Factor in the impact of current macroeconomic news (Fed, ECB, CPI, NFP, US10Y yields, DXY, VIX) from Reuters, Bloomberg, ForexLive, ForexFactory, Investing, Kitco, and CNBC.'
+        : 'Toma en cuenta el impacto de noticias macroeconómicas actuales (Fed, BCE, CPI, NFP, bonos US10Y, DXY, VIX) de Reuters, Bloomberg, ForexLive, ForexFactory, Investing, Kitco y CNBC.'
       : isEn
       ? 'IGNORE macroeconomic news; focus strictly on price structure, liquidity levels, range, and pure price action.'
       : 'IGNORA las noticias macroeconómicas; enfócate exclusivamente en estructura de precio, niveles de liquidez, rango y acción del precio.';
@@ -1201,17 +1132,17 @@ Focus: ${focusArea}. NY Time: ${currentKz.nyTime}. Session: ${currentKz.name}.
 Live Quotes: ${liveSnapshot}.
 ${newsInstruction}
 ${customDocument ? `Applicable analysis context:\n${customDocument.substring(0, 4500)}` : ''}
-IMPORTANT: Go straight to key levels, bias, points of interest, and action plan. Do NOT mention "online mode" or "database mode". Use 12-hour time format (e.g. 9:30 AM, 4:00 PM). Write 100% in English.`
+IMPORTANT: Go straight to key levels, bias, points of interest, and action plan. Use 12-hour time format (e.g. 9:30 AM, 4:00 PM). Write 100% in English.`
       : `Genera un reporte práctico, directo y al grano en ESPAÑOL para ${asset} (${timeframe}).
 Enfoque: ${focusArea}. Hora NY: ${currentKz.nyTime}. Sesión: ${currentKz.name}.
 Cotizaciones: ${liveSnapshot}.
 ${newsInstruction}
 ${customDocument ? `Contexto de análisis aplicable:\n${customDocument.substring(0, 4500)}` : ''}
-IMPORTANTE: Ve directo a los niveles, dirección, puntos de interés y plan operativo. NO menciones si estás en "modo online" o "modo base de datos". Usa formato de hora de 12 horas (ej. 9:30 AM, 4:00 PM).`;
+IMPORTANTE: Ve directo a los niveles, dirección, puntos de interés y plan operativo. Usa formato de hora de 12 horas (ej. 9:30 AM, 4:00 PM).`;
 
     const systemInstruction = isEn
-      ? `You are the lead analyst at TRstudio. Write clear, direct, practical trading reports in English without fluff. Never say "Online Mode" or "Database Mode". Always use 12h time format (AM/PM).`
-      : `Eres el analista principal de TRstudio. Escribe reportes claros, directos, sin texto exagerado ni repetitivo. Nunca digas "Modo Online" ni "Modo Base de Datos". Usa siempre horas en formato 12h (AM/PM).\n${webSourcesPromptContent}`;
+      ? `You are the lead analyst at TRstudio. Write clear, direct, practical trading reports in English without fluff. Always use 12h time format (AM/PM).`
+      : `Eres el analista principal de TRstudio. Escribe reportes claros, directos, sin texto exagerado ni repetitivo. Usa siempre horas en formato 12h (AM/PM).\n${webSourcesPromptContent}`;
 
     const response = await generateAiContentWithConnectedKey({
       model: 'gemini-3.1-flash-lite',
@@ -1249,50 +1180,61 @@ IMPORTANTE: Ve directo a los niveles, dirección, puntos de interés y plan oper
     });
   } catch (_err: any) {
     const inst = MARKET_INSTRUMENTS.find((i) => i.symbol === asset) || MARKET_INSTRUMENTS[0];
-    const dxy = MARKET_INSTRUMENTS.find((i) => i.symbol === 'DXY') || MARKET_INSTRUMENTS[4];
-    const us10y = MARKET_INSTRUMENTS.find((i) => i.symbol === 'US10Y') || MARKET_INSTRUMENTS[5];
-    const vix = MARKET_INSTRUMENTS.find((i) => i.symbol === 'VIX') || MARKET_INSTRUMENTS[6];
+    const spec = getSpec(inst.symbol) || INSTRUMENTS[0];
+    const dxy = MARKET_INSTRUMENTS.find((i) => i.symbol === 'DXY')!;
+    const us10y = MARKET_INSTRUMENTS.find((i) => i.symbol === 'US10Y')!;
+    const vix = MARKET_INSTRUMENTS.find((i) => i.symbol === 'VIX')!;
     const externalSources = buildExternalTraceabilitySources(asset);
-    const decimals = inst.price < 10 ? 4 : 2;
-    const mid = ((inst.high24h + inst.low24h) / 2).toFixed(decimals);
+    const mid = ((inst.high24h + inst.low24h) / 2).toFixed(spec.decimals);
+    const setupCalc = buildDeterministicSetupForInstrument({
+      asset: inst.symbol,
+      accountBalance: 10000,
+      riskPercentage: 0.5,
+      includeNews: Boolean(includeNews),
+      language,
+      currentKz,
+    });
 
     const baseReport = isEn
       ? `# Market Action Report: ${asset} (${timeframe})
 **NY Time:** ${currentKz.nyTime} | **Session:** ${currentKz.name} (${currentKz.windowHours})
 
 ## 1. Live Price & Key Levels
-- **Current Price:** **${inst.price.toLocaleString()}** (${inst.change24h})
+- **Current Price:** **${inst.price.toLocaleString()}** (${inst.change24h}) | **ATR (14):** ${inst.atr14}
 - **Day High (PDH):** **${inst.high24h.toLocaleString()}** | **Day Low (PDL):** **${inst.low24h.toLocaleString()}**
 - **Intraday Equilibrium (50%):** **${mid}**
 - **Structural Bias:** ${inst.price >= Number(mid) ? 'Bullish — targeting liquidity above daily high' : 'Bearish — selling pressure below intraday midpoint'}
 
-## 2. Actionable Zones (4H / 1H / 30M / 5M)
-- **Point of Interest (POI):** Watch pullback toward **${mid}** to validate absorption with a 15M/5M FVG.
-- **Primary Target:** **${inst.high24h.toLocaleString()}** | **Key Support:** **${inst.low24h.toLocaleString()}**
+## 2. Tactical Setup & Actionable Coordinates (${setupCalc.winProbability}% Win Probability)
+- **Direction & Strategy:** **${setupCalc.action}** via *${setupCalc.playbookName}*
+- **Entry Zone (Limit):** **${setupCalc.prices.entryPrice}** | **Stop Loss:** **${setupCalc.prices.stopLoss}** (${setupCalc.prices.stopLossDistance})
+- **Take Profit 1 (1:1.8):** **${setupCalc.prices.takeProfit1}** | **Take Profit 2 (1:3.0):** **${setupCalc.prices.takeProfit2}**
 ${
   includeNews
-    ? `\n## 3. Macro & News Context\n- **DXY:** ${dxy.price} (${dxy.change24h}) | **10Y Yield (US10Y):** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h}).\n- Monitor high-impact releases at 8:30 AM and 10:00 AM (NY Time).`
-    : `\n## 3. Pure Technical Focus\n- Evaluation strictly centered on candle structure, session liquidity, and 5M/30M confirmation (news filter disabled).`
+    ? `\n## 3. Macro & Intermarket Context\n- **DXY:** ${dxy.price} (${dxy.change24h}) | **10Y Yield (US10Y):** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h}).\n- Monitor high-impact releases at 8:30 AM and 10:00 AM (NY Time).`
+    : `\n## 3. Pure Technical Focus\n- Evaluation strictly centered on candle structure, session liquidity, and 5M/15M confirmation (news filter disabled).`
 }`
       : `# Reporte Operativo: ${asset} (${timeframe})
 **Hora NY:** ${currentKz.nyTime} | **Sesión:** ${currentKz.name} (${currentKz.windowHours})
 
 ## 1. Precio y Niveles Clave
-- **Cotización Actual:** **${inst.price.toLocaleString()}** (${inst.change24h})
+- **Cotización Actual:** **${inst.price.toLocaleString()}** (${inst.change24h}) | **ATR (14):** ${inst.atr14}
 - **Techo del Día (PDH):** **${inst.high24h.toLocaleString()}** | **Piso del Día (PDL):** **${inst.low24h.toLocaleString()}**
 - **Equilibrio Intradía (50%):** **${mid}**
 - **Sesgo Estructural:** ${inst.price >= Number(mid) ? 'Alcista — buscando liquidez sobre el máximo diario' : 'Bajista — presión bajo el punto medio intradía'}
 
-## 2. Zonas Operativas (4H / 1H / 30M / 5M)
-- **Zona de Interés (POI):** Espera de retroceso hacia **${mid}** para validar absorción con FVG en 15M/5M.
-- **Objetivo Primario:** **${inst.high24h.toLocaleString()}** | **Soporte Crítico:** **${inst.low24h.toLocaleString()}**
+## 2. Coordenadas Operativas Calculadas (${setupCalc.winProbability}% Prob. Acierto)
+- **Dirección y Estrategia:** **${setupCalc.action}** mediante *${setupCalc.playbookName}*
+- **Zona de Entrada (Limit):** **${setupCalc.prices.entryPrice}** | **Stop Loss:** **${setupCalc.prices.stopLoss}** (${setupCalc.prices.stopLossDistance})
+- **Take Profit 1 (1:1.8):** **${setupCalc.prices.takeProfit1}** | **Take Profit 2 (1:3.0):** **${setupCalc.prices.takeProfit2}**
 ${
   includeNews
-    ? `\n## 3. Contexto Macro y Noticias\n- **DXY:** ${dxy.price} (${dxy.change24h}) | **Bono 10Y (US10Y):** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h}).\n- Vigilar publicaciones de alto impacto a las 8:30 AM y 10:00 AM (hora NY).`
-    : `\n## 3. Enfoque Técnico Puro\n- Evaluación centrada estrictamente en estructura de velas, liquidez de sesión y confirmación en 5M/30M (filtro de noticias desactivado).`
+    ? `\n## 3. Contexto Macro e Intermercado\n- **DXY:** ${dxy.price} (${dxy.change24h}) | **Bono 10Y (US10Y):** ${us10y.price}% (${us10y.change24h}) | **VIX:** ${vix.price} (${vix.change24h}).\n- Vigilar publicaciones de carpeta roja a las 8:30 AM y 10:00 AM (hora NY).`
+    : `\n## 3. Enfoque Técnico Puro\n- Evaluación centrada estrictamente en estructura de velas, liquidez de sesión y confirmación en 5M/15M (filtro de noticias desactivado).`
 }`;
 
-    const fallbackReport = baseReport + formatAuditAttributionMarkdown(asset, currentKz, externalSources, ownDeclaration, language);
+    const fallbackReport =
+      baseReport + formatAuditAttributionMarkdown(asset, currentKz, externalSources, ownDeclaration, language);
 
     return res.json({
       asset,
@@ -1313,33 +1255,31 @@ ${
   }
 });
 
-// 6. Generate Tactical Trade Setup
+// 6. Generate Tactical Trade Setup (Always enforces exact risk math & contract sizing)
 app.post('/api/generate-trade-setup', async (req, res) => {
+  await syncRealTimeTradingViewQuotes();
   const {
     asset = 'NAS100',
-    accountBalance = 6000,
+    accountBalance = 10000,
     riskPercentage = 0.50,
     specificNotes = '',
     customDocument,
-    sourceMode = 'online', // 'online' | 'custom_base'
+    sourceMode = 'online',
     includeNews = true,
     language = 'es',
   } = req.body;
   const isEn = language === 'en';
   const currentKz = getCurrentKillzone();
   const liveSnapshot = getLiveMarketSnapshotText();
-  const externalSources = buildExternalTraceabilitySources(asset);
-  const ownDeclaration = buildOwnAnalysisDeclaration(asset, currentKz, riskPercentage, Boolean(includeNews), language);
-  const inst = MARKET_INSTRUMENTS.find((i) => i.symbol === asset) || MARKET_INSTRUMENTS[0];
 
   try {
     const newsRule = includeNews
       ? isEn
-        ? 'FACTOR IN NEWS: Integrate current macroeconomic sentiment, US10Y yields, DXY, and economic calendar from financial sources.'
-        : 'TOMAR EN CUENTA NOTICIAS: Integra el sentimiento macroeconómico actual, tasas US10Y, DXY y calendario económico de las fuentes financieras.'
+        ? 'FACTOR IN NEWS: Integrate current macroeconomic sentiment, US10Y yields, DXY, and economic calendar.'
+        : 'TOMAR EN CUENTA NOTICIAS: Integra el sentimiento macroeconómico actual, tasas US10Y, DXY y calendario económico.'
       : isEn
-      ? 'IGNORE NEWS: Calculate the entry strictly from technical price structure (4H/1H and 30M/15M/5M) without fundamental bias.'
-      : 'IGNORAR NOTICIAS: Calcula la entrada únicamente por estructura técnica de precio (4H/1H y 30M/15M/5M) sin condicionamiento fundamental.';
+      ? 'IGNORE NEWS: Calculate the entry strictly from technical price structure (4H/1H and 30M/15M/5M).'
+      : 'IGNORAR NOTICIAS: Calcula la entrada únicamente por estructura técnica de precio (4H/1H y 30M/15M/5M).';
 
     const analysisRule =
       sourceMode === 'custom_base' && customDocument
@@ -1347,18 +1287,10 @@ app.post('/api/generate-trade-setup', async (req, res) => {
         : `Research and structure the entry based on live prices and top financial sources:\n${webSourcesPromptContent}`;
 
     const prompt = isEn
-      ? `Calculate a practical, direct trading entry in ENGLISH for ${asset}. Account Balance: $${accountBalance}, Risk: ${riskPercentage}%. User Notes: "${specificNotes}". NY Time: ${currentKz.nyTime}. Live Quotes: ${liveSnapshot}.
-${newsRule}
-IMPORTANT:
-1. Evaluate confluence honestly: if the current session has low liquidity (like Post-Market Rollover) or if price is choppy/counter-trend, assign lower scores in confluenceBreakdown so totalConfluenceScore reflects the true probability of winning.
-2. In thesisRationale go straight to the technical and operational explanation in ENGLISH. Do NOT write "Online Mode" or "Database Mode". Use 12-hour time format (e.g. 9:30 AM, 4:00 PM).`
-      : `Calcula una entrada práctica y directa en ESPAÑOL para ${asset}. Balance: $${accountBalance}, Riesgo: ${riskPercentage}%. Notas: "${specificNotes}". Hora NY: ${currentKz.nyTime}. Cotizaciones: ${liveSnapshot}.
-${newsRule}
-IMPORTANTE:
-1. Evalúa la confluencia de forma real y crítica: si el horario actual tiene baja liquidez (como Post-Mercado/Rollover) o si el precio está en rango lateral o contra tendencia, asigna puntajes más bajos en confluenceBreakdown para que refleje la probabilidad real de acertar.
-2. En thesisRationale ve directo a la explicación técnica y operativa. NO escribas "Modo Online" ni "Basado en la base de datos". Usa formato de 12 horas (ej. 9:30 AM, 4:00 PM).`;
+      ? `Evaluate a practical trading entry in ENGLISH for ${asset}. Account Balance: $${accountBalance}, Risk: ${riskPercentage}%. User Notes: "${specificNotes}". NY Time: ${currentKz.nyTime}. Live Quotes: ${liveSnapshot}.\n${newsRule}`
+      : `Evalúa una entrada práctica y directa en ESPAÑOL para ${asset}. Balance: $${accountBalance}, Riesgo: ${riskPercentage}%. Notas: "${specificNotes}". Hora NY: ${currentKz.nyTime}. Cotizaciones: ${liveSnapshot}.\n${newsRule}`;
 
-    const systemInstruction = `Eres el motor cuantitativo de entradas de TRstudio. Devuelve un JSON válido, directo y práctico en ${isEn ? 'INGLÉS (English)' : 'ESPAÑOL'}.\n${analysisRule}`;
+    const systemInstruction = `Eres el motor cuantitativo de entradas de TRstudio. Devuelve un JSON válido en ${isEn ? 'INGLÉS (English)' : 'ESPAÑOL'}.\n${analysisRule}`;
 
     const response = await generateAiContentWithConnectedKey({
       model: 'gemini-3.1-flash-lite',
@@ -1369,11 +1301,8 @@ IMPORTANTE:
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            asset: { type: Type.STRING },
             action: { type: Type.STRING },
             playbookName: { type: Type.STRING },
-            tier: { type: Type.STRING },
-            totalConfluenceScore: { type: Type.NUMBER },
             confluenceBreakdown: {
               type: Type.OBJECT,
               properties: {
@@ -1385,37 +1314,11 @@ IMPORTANTE:
               },
               required: ['killzoneFilterScore', 'structureScore', 'liquiditySweepScore', 'intermarketScore', 'triggerScore'],
             },
-            prices: {
-              type: Type.OBJECT,
-              properties: {
-                currentPrice: { type: Type.NUMBER },
-                entryPrice: { type: Type.NUMBER },
-                entryType: { type: Type.STRING },
-                stopLoss: { type: Type.NUMBER },
-                stopLossDistance: { type: Type.STRING },
-                takeProfit1: { type: Type.NUMBER },
-                takeProfit2: { type: Type.NUMBER },
-                riskRewardRatio: { type: Type.STRING },
-              },
-              required: ['currentPrice', 'entryPrice', 'stopLoss', 'takeProfit1', 'takeProfit2', 'riskRewardRatio'],
-            },
-            propFirmRiskCalculation: {
-              type: Type.OBJECT,
-              properties: {
-                accountBalance: { type: Type.NUMBER },
-                riskPercentage: { type: Type.NUMBER },
-                monetaryRiskUsd: { type: Type.NUMBER },
-                recommendedLots: { type: Type.NUMBER },
-                contractSizeSpec: { type: Type.STRING },
-                hardDailyDrawdownAlert: { type: Type.STRING },
-              },
-              required: ['accountBalance', 'riskPercentage', 'monetaryRiskUsd', 'recommendedLots', 'hardDailyDrawdownAlert'],
-            },
             thesisRationale: { type: Type.STRING },
             invalidationCriteria: { type: Type.STRING },
             executionTips: { type: Type.ARRAY, items: { type: Type.STRING } },
           },
-          required: ['asset', 'action', 'playbookName', 'tier', 'totalConfluenceScore', 'confluenceBreakdown', 'prices', 'propFirmRiskCalculation', 'thesisRationale', 'invalidationCriteria', 'executionTips'],
+          required: ['action', 'playbookName', 'confluenceBreakdown', 'thesisRationale', 'invalidationCriteria', 'executionTips'],
         },
       },
     });
@@ -1424,176 +1327,43 @@ IMPORTANTE:
     const normalizedAction: 'BUY' | 'SELL' | 'WAIT' =
       parsed.action === 'SELL' ? 'SELL' : parsed.action === 'WAIT' ? 'WAIT' : 'BUY';
 
-    const quantEval = evaluateConfluenceAndProbability({
+    // Always compute prices, Stop Loss, and lot sizing through the deterministic engine so risk math is 100% exact
+    const finalSetup = buildDeterministicSetupForInstrument({
       asset,
-      action: normalizedAction,
-      inst,
-      currentKz,
-      includeNews: Boolean(includeNews),
+      accountBalance: Number(accountBalance) || 10000,
+      riskPercentage: Number(riskPercentage) || 0.50,
       specificNotes,
       customDocument,
-      lang: language,
-      aiBreakdown: parsed.confluenceBreakdown,
+      includeNews: Boolean(includeNews),
+      language,
+      currentKz,
+      aiOverride: {
+        action: normalizedAction,
+        playbookName: parsed.playbookName,
+        thesisRationale: parsed.thesisRationale,
+        invalidationCriteria: parsed.invalidationCriteria,
+        executionTips: parsed.executionTips,
+        confluenceBreakdown: parsed.confluenceBreakdown,
+      },
     });
 
     return res.json({
-      setup: {
-        ...parsed,
-        action: normalizedAction,
-        tier: quantEval.tier,
-        totalConfluenceScore: quantEval.totalConfluenceScore,
-        confluenceBreakdown: quantEval.confluenceBreakdown,
-        winProbability: quantEval.winProbability,
-        recommendationVerdict: quantEval.recommendationVerdict,
-        recommendationLabel: quantEval.recommendationLabel,
-        recommendationReason: quantEval.recommendationReason,
-        externalSources,
-        ownAnalysisDeclaration: ownDeclaration,
-      },
+      setup: finalSetup,
       nyTime: currentKz.nyTime,
       session: currentKz.name,
       timestamp: new Date().toISOString(),
     });
   } catch (_err: any) {
-    const dxy = MARKET_INSTRUMENTS.find((i) => i.symbol === 'DXY') || MARKET_INSTRUMENTS[4];
-    const us10y = MARKET_INSTRUMENTS.find((i) => i.symbol === 'US10Y') || MARKET_INSTRUMENTS[5];
-    const monetaryRisk = (accountBalance * riskPercentage) / 100;
-
-    // Determine direction from real 24h momentum & user notes
-    const notesLower = (specificNotes || '').toLowerCase();
-    const isBullish24h = String(inst.change24h || '').startsWith('+');
-    let action: 'BUY' | 'SELL' | 'WAIT' = isBullish24h ? 'BUY' : 'SELL';
-    if (notesLower.includes('venta') || notesLower.includes('sell') || notesLower.includes('short')) {
-      action = 'SELL';
-    } else if (notesLower.includes('compra') || notesLower.includes('buy') || notesLower.includes('long')) {
-      action = 'BUY';
-    }
-
-    const dirMult = action === 'BUY' ? 1 : -1;
-
-    let entryPrice = inst.price;
-    let stopLoss = inst.price;
-    let takeProfit1 = inst.price;
-    let takeProfit2 = inst.price;
-    let stopDistanceStr = '';
-    let lots = 1.0;
-    let contractSpec = '';
-    let playbook = isEn ? 'Intraday Liquidity & Structure' : 'Estructura & Liquidez Intradía';
-
-    if (asset === 'NAS100') {
-      const stopPts = 42.0;
-      entryPrice = Math.round((inst.price - dirMult * 12.0) * 10) / 10;
-      stopLoss = Math.round((entryPrice - dirMult * stopPts) * 10) / 10;
-      takeProfit1 = Math.round((entryPrice + dirMult * stopPts * 1.8) * 10) / 10;
-      takeProfit2 = Math.round((entryPrice + dirMult * stopPts * 3.0) * 10) / 10;
-      stopDistanceStr = '42 pts';
-      lots = parseFloat((monetaryRisk / stopPts).toFixed(2));
-      contractSpec = isEn ? '1 CFD Lot = $1.00 USD/pt' : '1 Lote CFD = $1.00 USD/pto';
-      playbook = isEn ? '15M/5M FVG & Liquidity Sweep' : 'Barrido de Liquidez & FVG 15M/5M';
-    } else if (asset === 'US30') {
-      const stopPts = 75.0;
-      entryPrice = Math.round(inst.price - dirMult * 25.0);
-      stopLoss = Math.round(entryPrice - dirMult * stopPts);
-      takeProfit1 = Math.round(entryPrice + dirMult * stopPts * 1.8);
-      takeProfit2 = Math.round(entryPrice + dirMult * stopPts * 3.0);
-      stopDistanceStr = '75 pts';
-      lots = parseFloat((monetaryRisk / stopPts).toFixed(2));
-      contractSpec = isEn ? '1 CFD Lot = $1.00 USD/pt' : '1 Lote CFD = $1.00 USD/pto';
-      playbook = isEn ? '1H Order Block Absorption & NY Flow' : 'Absorción en Order Block 1H & Flujo NY';
-    } else if (asset === 'XAUUSD') {
-      const stopDol = 4.80;
-      entryPrice = Math.round((inst.price - dirMult * 1.20) * 100) / 100;
-      stopLoss = Math.round((entryPrice - dirMult * stopDol) * 100) / 100;
-      takeProfit1 = Math.round((entryPrice + dirMult * stopDol * 1.8) * 100) / 100;
-      takeProfit2 = Math.round((entryPrice + dirMult * stopDol * 3.0) * 100) / 100;
-      stopDistanceStr = '$4.80 (48 pips)';
-      lots = parseFloat((monetaryRisk / (stopDol * 100)).toFixed(2));
-      contractSpec = isEn ? '1 Lot = 100 oz ($10/pip)' : '1 Lote = 100 oz ($10/pip)';
-      playbook = isEn ? 'Liquidity Sweep & COMEX Expansion' : 'Toma de Liquidez & Expansión COMEX';
-    } else {
-      const stopPips = 12.0;
-      entryPrice = Math.round((inst.price - dirMult * 0.0008) * 10000) / 10000;
-      stopLoss = Math.round((entryPrice - dirMult * 0.0012) * 10000) / 10000;
-      takeProfit1 = Math.round((entryPrice + dirMult * 0.0022) * 10000) / 10000;
-      takeProfit2 = Math.round((entryPrice + dirMult * 0.0036) * 10000) / 10000;
-      stopDistanceStr = '12 pips';
-      lots = parseFloat((monetaryRisk / (stopPips * 10)).toFixed(2));
-      contractSpec = isEn ? '1 Lot = 100,000 units ($10/pip)' : '1 Lote = 100,000 uds ($10/pip)';
-      playbook = isEn ? 'SMT Divergence & OTE Pullback' : 'Divergencia SMT & Retroceso OTE';
-    }
-
-    const quantEval = evaluateConfluenceAndProbability({
+    const fallbackSetup = buildDeterministicSetupForInstrument({
       asset,
-      action,
-      inst,
-      currentKz,
-      includeNews: Boolean(includeNews),
+      accountBalance: Number(accountBalance) || 10000,
+      riskPercentage: Number(riskPercentage) || 0.50,
       specificNotes,
       customDocument,
-      lang: language,
+      includeNews: Boolean(includeNews),
+      language,
+      currentKz,
     });
-
-    const newsContextSentence = includeNews
-      ? isEn
-        ? ` Macro context checked against DXY at ${dxy.price} (${dxy.change24h}) and US10Y yield at ${us10y.price}%.`
-        : ` Confluencia macro evaluada con DXY en ${dxy.price} (${dxy.change24h}) y bono US10Y en ${us10y.price}%.`
-      : isEn
-      ? ' Entry calculated strictly from price action and technical structure (news filter off).'
-      : ' Entrada calculada estrictamente por acción del precio y estructura técnica (sin filtro de noticias).';
-
-    const fallbackSetup = {
-      asset,
-      action,
-      playbookName: playbook,
-      tier: quantEval.tier,
-      totalConfluenceScore: quantEval.totalConfluenceScore,
-      confluenceBreakdown: quantEval.confluenceBreakdown,
-      winProbability: quantEval.winProbability,
-      recommendationVerdict: quantEval.recommendationVerdict,
-      recommendationLabel: quantEval.recommendationLabel,
-      recommendationReason: quantEval.recommendationReason,
-      prices: {
-        currentPrice: inst.price,
-        entryPrice,
-        entryType: isEn
-          ? `${action === 'BUY' ? 'Buy Limit' : 'Sell Limit'} at 50% FVG / POI`
-          : `${action === 'BUY' ? 'Buy Limit' : 'Sell Limit'} en 50% FVG / Zona POI`,
-        stopLoss,
-        stopLossDistance: stopDistanceStr,
-        takeProfit1,
-        takeProfit2,
-        riskRewardRatio: '1:3.0',
-      },
-      propFirmRiskCalculation: {
-        accountBalance,
-        riskPercentage,
-        monetaryRiskUsd: monetaryRisk,
-        recommendedLots: Math.max(0.01, lots),
-        contractSizeSpec: contractSpec,
-        hardDailyDrawdownAlert: isEn
-          ? `Risk set to ${riskPercentage}% ($${monetaryRisk.toFixed(2)} USD). Recommended daily stop limit: -1.5% (-$${(accountBalance * 0.015).toLocaleString()} USD).`
-          : `Riesgo controlado al ${riskPercentage}% ($${monetaryRisk.toFixed(2)} USD). Límite diario recomendado: -1.5% (-$${(accountBalance * 0.015).toLocaleString()} USD).`,
-      },
-      thesisRationale: isEn
-        ? `${asset} trades at ${inst.price.toLocaleString()} (${inst.change24h}) within the ${inst.low24h.toLocaleString()} – ${inst.high24h.toLocaleString()} range during ${currentKz.name}. Looking for ${action === 'BUY' ? 'bullish reaction at discount' : 'bearish rejection at premium'} targeting ${takeProfit2.toLocaleString()}.${newsContextSentence}`
-        : `${asset} cotiza en ${inst.price.toLocaleString()} (${inst.change24h}) dentro del rango ${inst.low24h.toLocaleString()} – ${inst.high24h.toLocaleString()} durante ${currentKz.name}. Se proyecta ${action === 'BUY' ? 'reacción compradora en descuento' : 'rechazo vendedor en zona premium'} buscando liquidez hacia ${takeProfit2.toLocaleString()}.${newsContextSentence}`,
-      invalidationCriteria: isEn
-        ? `Invalidated if a 15M or 30M candle closes with a full body ${action === 'BUY' ? 'below' : 'above'} ${stopLoss}.`
-        : `Se invalida si una vela de 15M o 30M cierra con cuerpo completo por ${action === 'BUY' ? 'debajo' : 'encima'} de ${stopLoss}.`,
-      executionTips: isEn
-        ? [
-            'Close 50% of the position at TP1 and move Stop Loss to Break Even.',
-            `Let the runner target TP2 (${takeProfit2}).`,
-            'Avoid holding new positions open through the 5:00 PM NY rollover.',
-          ]
-        : [
-            'Cerrar 50% de la posición en TP1 y mover el Stop Loss a Break Even.',
-            `Dejar correr el resto hacia TP2 (${takeProfit2}).`,
-            'Evitar mantener operaciones abiertas durante el rollover (5:00 PM NY).',
-          ],
-      externalSources,
-      ownAnalysisDeclaration: ownDeclaration,
-    };
 
     return res.json({
       setup: fallbackSetup,

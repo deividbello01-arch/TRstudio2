@@ -1,9 +1,26 @@
-export type AssetSymbol = 'NAS100' | 'US30' | 'XAUUSD' | 'EURUSD' | 'DXY' | 'US10Y' | 'VIX' | 'TODOS';
+export type AssetSymbol =
+  | 'NAS100'
+  | 'US500'
+  | 'US30'
+  | 'US2000'
+  | 'GER40'
+  | 'UK100'
+  | 'EU50'
+  | 'FRA40'
+  | 'JP225'
+  | 'HK50'
+  | 'XAUUSD'
+  | 'EURUSD'
+  | 'DXY'
+  | 'US10Y'
+  | 'VIX'
+  | 'TODOS';
 
 export interface InstrumentQuote {
   symbol: string;
   name: string;
   category: string;
+  region?: 'US' | 'EU' | 'UK' | 'ASIA' | 'GLOBAL';
   price: number;
   change24h: string;
   high24h?: number;
@@ -56,8 +73,11 @@ export interface MarketQueryResponse {
 
 export interface TradeSetup {
   asset: string;
+  assetName?: string;
+  region?: string;
   action: 'BUY' | 'SELL' | 'WAIT';
   playbookName: string;
+  strategyId?: string;
   tier: string;
   totalConfluenceScore: number;
   confluenceBreakdown: {
@@ -73,6 +93,7 @@ export interface TradeSetup {
     entryType: string;
     stopLoss: number;
     stopLossDistance: string;
+    stopLossPoints?: number;
     takeProfit1: number;
     takeProfit2: number;
     riskRewardRatio: string;
@@ -81,7 +102,11 @@ export interface TradeSetup {
     accountBalance: number;
     riskPercentage: number;
     monetaryRiskUsd: number;
+    actualRiskAtStopUsd: number;
+    projectedProfitTp1Usd: number;
+    projectedProfitTp2Usd: number;
     recommendedLots: number;
+    valuePerPointPerLotUsd: number;
     contractSizeSpec: string;
     hardDailyDrawdownAlert: string;
   };
@@ -94,6 +119,15 @@ export interface TradeSetup {
   recommendationReason?: string;
   externalSources?: ExternalSourceAttribution[];
   ownAnalysisDeclaration?: string;
+}
+
+export interface ScannerResponse {
+  bestSetup: TradeSetup;
+  rankedSetups: TradeSetup[];
+  scannedCount: number;
+  nyTime: string;
+  session: string;
+  timestamp: string;
 }
 
 export interface TradingReport {
@@ -130,10 +164,10 @@ export interface OpenPosition {
   stopLoss: number;
   takeProfit1: number;
   takeProfit2: number;
-  monetaryRisk: number; // in USD
-  projectedReward1: number; // in USD
-  projectedReward2: number; // in USD
-  riskRewardRatio: number; // numeric (e.g. 2.8)
+  monetaryRisk: number;
+  projectedReward1: number;
+  projectedReward2: number;
+  riskRewardRatio: number;
   playbook: string;
   openedAt: string;
   status: 'OPEN' | 'BREAK_EVEN' | 'PARTIAL_CLOSED';
@@ -159,6 +193,8 @@ export interface AppSettings {
   showChartSection: boolean;
   showFooter: boolean;
   // Navigation tab toggles
+  showScannerTab: boolean;
+  showStrategiesTab: boolean;
   showReportsTab: boolean;
   showKnowledgeTab: boolean;
   showCalculatorTab: boolean;
@@ -172,7 +208,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   minimalistMode: false,
   compactCards: false,
   autoTick: true,
-  defaultBalance: 6000,
+  defaultBalance: 10000,
   defaultRisk: 0.50,
   showTopStatusBar: true,
   showSessionBanner: true,
@@ -180,6 +216,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   showMacroBar: true,
   showChartSection: true,
   showFooter: true,
+  showScannerTab: true,
+  showStrategiesTab: true,
   showReportsTab: true,
   showKnowledgeTab: true,
   showCalculatorTab: true,

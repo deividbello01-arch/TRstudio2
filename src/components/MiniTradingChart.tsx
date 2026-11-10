@@ -15,7 +15,6 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
   const [showFVG, setShowFVG] = useState(true);
   const [showLiquidity, setShowLiquidity] = useState(true);
 
-  // Generate deterministic synthetic candlestick data around the instrument's real price
   const generateCandles = () => {
     const base = instrument.price;
     const isCryptoOrIndex = base > 1000;
@@ -25,7 +24,7 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
 
     for (let i = 0; i < 28; i++) {
       const isUp = (i * 7 + 13) % 11 > 4;
-      const variation = (Math.sin(i * 0.6) * spread * 0.8) + (isUp ? spread * 0.4 : -spread * 0.4);
+      const variation = Math.sin(i * 0.6) * spread * 0.8 + (isUp ? spread * 0.4 : -spread * 0.4);
       const close = currentOpen + variation;
       const high = Math.max(currentOpen, close) + Math.abs(spread * 0.4 * Math.cos(i));
       const low = Math.min(currentOpen, close) - Math.abs(spread * 0.3 * Math.sin(i));
@@ -50,7 +49,6 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
   const maxPrice = Math.max(...allPrices);
   const priceRange = maxPrice - minPrice || 1;
 
-  // Normalization for SVG height (200px)
   const chartHeight = 180;
   const chartWidth = 540;
   const candleWidth = chartWidth / candles.length;
@@ -62,23 +60,27 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
   const currentY = getY(instrument.price);
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-xl">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-800/80">
+    <div className="bg-[#18110b] border border-[#3b271a] rounded-xl p-4 shadow-xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-[#3b271a]">
         <div className="flex items-center gap-3">
-          <div className="px-2.5 py-1 rounded bg-slate-800 border border-slate-700/60 font-mono font-bold text-white text-sm">
+          <div className="px-2.5 py-1 rounded bg-[#24170f] border border-[#4d3221] font-mono font-bold text-white text-sm">
             {instrument.symbol}
           </div>
           <div>
-            <div className="text-xs text-slate-400">{instrument.name}</div>
+            <div className="text-xs text-amber-200/70">{instrument.name}</div>
             <div className="flex items-center gap-2 font-mono">
               <span className="text-base font-bold text-white">
-                {instrument.price.toLocaleString(undefined, { minimumFractionDigits: instrument.price < 10 ? 4 : 2 })}
+                {instrument.price.toLocaleString(undefined, {
+                  minimumFractionDigits: instrument.price < 10 ? 4 : 2,
+                })}
               </span>
-              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                instrument.change24h.startsWith('+') 
-                  ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/50' 
-                  : 'bg-rose-950/80 text-rose-400 border border-rose-800/50'
-              }`}>
+              <span
+                className={`text-xs px-1.5 py-0.5 rounded ${
+                  instrument.change24h.startsWith('+')
+                    ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/50'
+                    : 'bg-rose-950/80 text-rose-400 border border-rose-800/50'
+                }`}
+              >
                 {instrument.change24h}
               </span>
             </div>
@@ -86,13 +88,13 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
         </div>
 
         {/* Quick chart toggles */}
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-xs font-mono">
           <button
             onClick={() => setShowFVG(!showFVG)}
             className={`px-2.5 py-1 rounded flex items-center gap-1.5 transition-colors border ${
-              showFVG 
-                ? 'bg-cyan-950/80 text-cyan-300 border-cyan-800/60' 
-                : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800'
+              showFVG
+                ? 'bg-amber-950/80 text-amber-300 border-amber-700/60'
+                : 'bg-[#120c08] text-amber-200/60 border-[#3b271a] hover:bg-[#24170f]'
             }`}
           >
             <Layers className="w-3 h-3" />
@@ -101,9 +103,9 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
           <button
             onClick={() => setShowLiquidity(!showLiquidity)}
             className={`px-2.5 py-1 rounded flex items-center gap-1.5 transition-colors border ${
-              showLiquidity 
-                ? 'bg-amber-950/80 text-amber-300 border-amber-800/60' 
-                : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800'
+              showLiquidity
+                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800/60'
+                : 'bg-[#120c08] text-amber-200/60 border-[#3b271a] hover:bg-[#24170f]'
             }`}
           >
             <Crosshair className="w-3 h-3" />
@@ -113,11 +115,8 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
       </div>
 
       {/* SVG Candlestick Canvas */}
-      <div className="relative w-full overflow-hidden bg-slate-950/60 rounded-lg p-2 border border-slate-800/50">
-        <svg
-          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-          className="w-full h-44 select-none"
-        >
+      <div className="relative w-full overflow-hidden bg-[#120c08] rounded-lg p-2 border border-[#3b271a]">
+        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-44 select-none">
           {/* Background Grid Lines */}
           {[0.2, 0.4, 0.6, 0.8].map((pct, idx) => (
             <line
@@ -126,7 +125,7 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
               y1={chartHeight * pct}
               x2={chartWidth}
               y2={chartHeight * pct}
-              stroke="#1e293b"
+              stroke="#2d1c12"
               strokeDasharray="3 3"
               strokeWidth="0.8"
             />
@@ -140,19 +139,19 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
                 y={getY(maxPrice - priceRange * 0.35)}
                 width={candleWidth * 7}
                 height={Math.max(16, priceRange * 0.12 * (chartHeight / priceRange))}
-                fill="rgba(6, 182, 212, 0.15)"
-                stroke="rgba(6, 182, 212, 0.5)"
+                fill="rgba(245, 158, 11, 0.16)"
+                stroke="rgba(245, 158, 11, 0.55)"
                 strokeDasharray="2 2"
                 strokeWidth="1"
               />
               <text
                 x={candleWidth * 14 + 6}
                 y={getY(maxPrice - priceRange * 0.35) + 12}
-                fill="#22d3ee"
+                fill="#fbbf24"
                 fontSize="9"
                 fontFamily="monospace"
               >
-                FVG 1H (BISI) CE 50%
+                FVG 1H / 15M (CE 50%)
               </text>
             </g>
           )}
@@ -160,20 +159,19 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
           {/* Liquidity Lines */}
           {showLiquidity && (
             <g>
-              {/* Previous Day High */}
               <line
                 x1="0"
                 y1={chartHeight * 0.15}
                 x2={chartWidth}
                 y2={chartHeight * 0.15}
-                stroke="#f59e0b"
+                stroke="#10b981"
                 strokeDasharray="4 4"
                 strokeWidth="1.2"
               />
               <text
-                x={chartWidth - 110}
+                x={chartWidth - 135}
                 y={chartHeight * 0.15 - 4}
-                fill="#fbbf24"
+                fill="#34d399"
                 fontSize="9"
                 fontFamily="monospace"
                 fontWeight="bold"
@@ -181,20 +179,19 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
                 PDH (Buy-Side Liquidity)
               </text>
 
-              {/* Previous Day Low */}
               <line
                 x1="0"
                 y1={chartHeight * 0.88}
                 x2={chartWidth}
                 y2={chartHeight * 0.88}
-                stroke="#ef4444"
+                stroke="#f43f5e"
                 strokeDasharray="4 4"
                 strokeWidth="1.2"
               />
               <text
-                x={chartWidth - 110}
+                x={chartWidth - 135}
                 y={chartHeight * 0.88 - 4}
-                fill="#f87171"
+                fill="#fb7185"
                 fontSize="9"
                 fontFamily="monospace"
                 fontWeight="bold"
@@ -217,16 +214,7 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
 
             return (
               <g key={candle.id} className="transition-all hover:opacity-80">
-                {/* Wick */}
-                <line
-                  x1={x}
-                  y1={highY}
-                  x2={x}
-                  y2={lowY}
-                  stroke={color}
-                  strokeWidth="1.2"
-                />
-                {/* Body */}
+                <line x1={x} y1={highY} x2={x} y2={lowY} stroke={color} strokeWidth="1.2" />
                 <rect
                   x={x - candleWidth * 0.35}
                   y={bodyY}
@@ -245,19 +233,19 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
             y1={currentY}
             x2={chartWidth}
             y2={currentY}
-            stroke="#38bdf8"
+            stroke="#f59e0b"
             strokeWidth="1.2"
           />
           <rect
-            x={chartWidth - 75}
+            x={chartWidth - 78}
             y={currentY - 9}
-            width="75"
+            width="78"
             height="18"
-            fill="#0369a1"
+            fill="#d97706"
             rx="3"
           />
           <text
-            x={chartWidth - 70}
+            x={chartWidth - 73}
             y={currentY + 3}
             fill="#ffffff"
             fontSize="9.5"
@@ -269,25 +257,27 @@ export const MiniTradingChart: React.FC<MiniTradingChartProps> = ({
         </svg>
 
         {/* Micro Footer Bar with Key Levels */}
-        <div className="mt-2 pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-[11px] font-mono text-slate-400 gap-2">
+        <div className="mt-2 pt-2 border-t border-[#3b271a] flex flex-wrap items-center justify-between text-[11px] font-mono text-amber-200/70 gap-2">
           <div className="flex items-center gap-3">
-            <span>ATR (14): <strong className="text-slate-200">{instrument.atr14 || 'Normal'}</strong></span>
+            <span>
+              ATR (14): <strong className="text-white">{instrument.atr14 || 'Normal'}</strong>
+            </span>
             <span>
               {isEn ? '4H Bias:' : 'Sesgo 4H:'}{' '}
-              <strong className="text-cyan-300">
+              <strong className="text-amber-300">
                 {instrument.bias4H || (isEn ? 'Bullish' : 'Alcista')}
               </strong>
             </span>
           </div>
           {instrument.keyLevels && (
-            <div className="flex items-center gap-2 text-slate-300">
+            <div className="flex items-center gap-2">
               {instrument.keyLevels.pdh && (
-                <span className="px-1.5 py-0.5 rounded bg-amber-950/40 text-amber-300 border border-amber-900/40">
+                <span className="px-1.5 py-0.5 rounded bg-emerald-950/50 text-emerald-300 border border-emerald-800/50">
                   PDH: {instrument.keyLevels.pdh}
                 </span>
               )}
               {instrument.keyLevels.pdl && (
-                <span className="px-1.5 py-0.5 rounded bg-rose-950/40 text-rose-300 border border-rose-900/40">
+                <span className="px-1.5 py-0.5 rounded bg-rose-950/50 text-rose-300 border border-rose-800/50">
                   PDL: {instrument.keyLevels.pdl}
                 </span>
               )}

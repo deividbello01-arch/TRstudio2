@@ -374,7 +374,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               />
               <ToggleRow
                 label={isEn ? 'Live Asset Cards' : 'Tarjetas de Precios en Vivo'}
-                desc={isEn ? 'NAS100, US30, XAUUSD, EURUSD cards' : 'Cotizaciones de NAS100, US30, XAUUSD y EURUSD'}
+                desc={
+                  isEn
+                    ? '12 primary CFD indices, Gold (XAUUSD) & Forex cards'
+                    : 'Cotizaciones de 12 índices CFD primarios, Oro y Forex'
+                }
                 checked={settings.showTickerGrid}
                 onChange={() => onUpdateSettings({ showTickerGrid: !settings.showTickerGrid })}
               />
@@ -408,6 +412,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </span>
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <ToggleRow
+                label={isEn ? 'Best Setup Scanner Tab' : 'Pestaña Escáner de Mejor Entrada'}
+                desc={
+                  isEn
+                    ? 'Multi-index ranking of highest win-rate setups'
+                    : 'Escáner simultáneo de índices con el #1 de mayor acierto'
+                }
+                checked={settings.showScannerTab ?? true}
+                onChange={() => onUpdateSettings({ showScannerTab: !(settings.showScannerTab ?? true) })}
+              />
+              <ToggleRow
+                label={isEn ? 'Strategies & Playbooks Tab' : 'Pestaña de Estrategias y Webs'}
+                desc={
+                  isEn
+                    ? 'Detailed step-by-step strategies & 19 web sources'
+                    : 'Academia de estrategias explicadas y directorio de 19 webs'
+                }
+                checked={settings.showStrategiesTab ?? true}
+                onChange={() => onUpdateSettings({ showStrategiesTab: !(settings.showStrategiesTab ?? true) })}
+              />
               <ToggleRow
                 label={isEn ? 'Gemini News Chat Tab' : 'Pestaña Chat de Noticias (Gemini)'}
                 desc={isEn ? 'Show Gemini News Q&A in menu' : 'Mostrar el chat de dudas sobre noticias'}

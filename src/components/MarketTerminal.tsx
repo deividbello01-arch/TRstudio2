@@ -6,6 +6,7 @@ import {
   RefreshCw,
   Globe,
   Timer,
+  Radar,
 } from 'lucide-react';
 import { InstrumentQuote, KillzoneSession, AppSettings } from '../types/trading';
 import { MiniTradingChart } from './MiniTradingChart';
@@ -18,6 +19,8 @@ interface MarketTerminalProps {
   activeDocSnippet?: string;
   onRequestEntry: (symbol: string) => void;
   onGenerateReport: (symbol: string) => void;
+  onOpenScanner?: () => void;
+  initialAsset?: string;
   settings: AppSettings;
 }
 
@@ -66,14 +69,14 @@ function computeLiveSessionTimers(isEn: boolean, is12h: boolean): LiveSessionTim
   let sessionName = isEn ? 'Asian Range (Asia Session)' : 'Rango Asiático (Sesión Asia)';
   let sessionHours = is12h ? '7:00 PM – 2:00 AM' : '19:00 – 02:00';
   let remainingSec = 0;
-  let nextSessionName = isEn ? 'London Session' : 'Sesión Londres';
+  let nextSessionName = isEn ? 'London & Europe Open' : 'Sesión Londres & Europa';
   let nextSessionWindow = is12h ? '2:00 AM – 8:00 AM (NY)' : '02:00 – 08:00 (NY)';
   let nextSessionFocus = isEn
-    ? 'Asian range sweep and expansion in EUR/USD & XAU/USD'
-    : 'Barrido del rango asiático y expansión en EUR/USD y XAU/USD';
+    ? 'Asian range sweep & expansion in GER40, UK100, EU50, EUR/USD & XAU/USD'
+    : 'Barrido del rango asiático y expansión en GER40, UK100, EU50, EUR/USD y XAU/USD';
 
   if (secOfDay >= 2 * 3600 && secOfDay < 8 * 3600) {
-    sessionName = isEn ? 'London Session' : 'Sesión Londres';
+    sessionName = isEn ? 'London & European Session' : 'Sesión Londres & Europea';
     sessionHours = is12h ? '2:00 AM – 8:00 AM' : '02:00 – 08:00';
     remainingSec = 8 * 3600 - secOfDay;
     nextSessionName = isEn ? 'NY Pre-Market & COMEX Gold' : 'Pre-Mercado NY & Oro COMEX';
@@ -88,8 +91,8 @@ function computeLiveSessionTimers(isEn: boolean, is12h: boolean): LiveSessionTim
     nextSessionName = isEn ? 'New York Session (Open)' : 'Sesión Nueva York (Apertura)';
     nextSessionWindow = is12h ? '9:30 AM – 4:00 PM (NY)' : '09:30 – 16:00 (NY)';
     nextSessionFocus = isEn
-      ? 'Primary liquidity injection across NAS100, US500, XAU/USD & EUR/USD'
-      : 'Inyección de liquidez principal en NAS100, US500, XAU/USD y EUR/USD';
+      ? 'Primary liquidity injection across NAS100, US500, US30, US2000 & XAU/USD'
+      : 'Inyección de liquidez principal en NAS100, US500, US30, US2000 y XAU/USD';
   } else if (secOfDay >= 9.5 * 3600 && secOfDay < 16 * 3600) {
     sessionName = isEn ? 'New York Session' : 'Sesión Nueva York';
     sessionHours = is12h ? '9:30 AM – 4:00 PM' : '09:30 – 16:00';
@@ -103,20 +106,15 @@ function computeLiveSessionTimers(isEn: boolean, is12h: boolean): LiveSessionTim
     sessionName = isEn ? 'Post-Market & Rollover' : 'Post-Mercado & Rollover';
     sessionHours = is12h ? '4:00 PM – 7:00 PM' : '16:00 – 19:00';
     remainingSec = 19 * 3600 - secOfDay;
-    nextSessionName = isEn ? 'Asian Range (Asia Session)' : 'Rango Asiático (Sesión Asia)';
+    nextSessionName = isEn ? 'Asian Session (JP225 & HK50)' : 'Sesión Asia (JP225 & HK50)';
     nextSessionWindow = is12h ? '7:00 PM – 2:00 AM (NY)' : '19:00 – 02:00 (NY)';
     nextSessionFocus = isEn
-      ? 'Accumulation & Asian high/low liquidity boundaries'
-      : 'Acumulación y marcación de altos/bajos de liquidez asiática';
+      ? 'Tokyo/HK index liquidity & Asian high/low range formation'
+      : 'Liquidez en Nikkei 225 / Hang Seng y marcación de altos/bajos asiáticos';
   } else {
-    sessionName = isEn ? 'Asian Range (Asia Session)' : 'Rango Asiático (Sesión Asia)';
+    sessionName = isEn ? 'Asian Session (JP225 & HK50)' : 'Sesión Asia (JP225 & HK50)';
     sessionHours = is12h ? '7:00 PM – 2:00 AM' : '19:00 – 02:00';
     remainingSec = secOfDay >= 19 * 3600 ? 24 * 3600 - secOfDay + 2 * 3600 : 2 * 3600 - secOfDay;
-    nextSessionName = isEn ? 'London Session' : 'Sesión Londres';
-    nextSessionWindow = is12h ? '2:00 AM – 8:00 AM (NY)' : '02:00 – 08:00 (NY)';
-    nextSessionFocus = isEn
-      ? 'Asian range sweep and expansion in EUR/USD & XAU/USD'
-      : 'Barrido del rango asiático y expansión en EUR/USD y XAU/USD';
   }
 
   return {
@@ -136,9 +134,18 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
   onRefreshFeed,
   onRequestEntry,
   onGenerateReport,
+  onOpenScanner,
+  initialAsset = 'NAS100',
   settings,
 }) => {
-  const [selectedSymbol, setSelectedSymbol] = useState<string>('NAS100');
+  const [selectedSymbol, setSelectedSymbol] = useState<string>(initialAsset);
+
+  useEffect(() => {
+    if (initialAsset) {
+      setSelectedSymbol(initialAsset);
+    }
+  }, [initialAsset]);
+  const [regionFilter, setRegionFilter] = useState<'ALL' | 'US' | 'EU_UK' | 'ASIA_GLOBAL'>('ALL');
   const [chartMode, setChartMode] = useState<'tradingview' | 'microstructure'>('tradingview');
   const isEn = settings.language === 'en';
   const is12h = settings.timeFormat === '12h';
@@ -155,7 +162,19 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
     return () => clearInterval(interval);
   }, [isEn, is12h]);
 
-  const selectedInstrument = instruments.find((i) => i.symbol === selectedSymbol) || instruments[0];
+  const tradeableInstruments = instruments.filter((i) => i.category !== 'Macro Variable');
+  const macroInstruments = instruments.filter((i) => i.category === 'Macro Variable');
+
+  const filteredTradeables = tradeableInstruments.filter((inst) => {
+    if (regionFilter === 'US') return inst.region === 'US';
+    if (regionFilter === 'EU_UK') return inst.region === 'EU' || inst.region === 'UK';
+    if (regionFilter === 'ASIA_GLOBAL')
+      return inst.region === 'ASIA' || inst.region === 'GLOBAL';
+    return true;
+  });
+
+  const selectedInstrument =
+    instruments.find((i) => i.symbol === selectedSymbol) || instruments[0];
 
   return (
     <div className={settings.compactCards ? 'space-y-3' : 'space-y-6'}>
@@ -167,7 +186,6 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
           } rounded-xl border bg-[#18110b] border-[#3b271a] shadow-lg`}
         >
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center">
-            {/* Left: Current Section Info */}
             <div className="flex items-start gap-3">
               <div
                 className={`p-2.5 rounded-xl border shrink-0 ${
@@ -194,7 +212,6 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
               </div>
             </div>
 
-            {/* Center: Remaining Time in Current Section */}
             <div className="p-3 rounded-xl bg-[#120c08] border border-[#3b271a] flex items-center justify-between">
               <div>
                 <div className="text-[10px] uppercase font-mono text-amber-300/60 flex items-center gap-1">
@@ -214,24 +231,25 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
               {session && session.recommendedAssets.length > 0 && (
                 <div className="text-right font-mono">
                   <span className="text-[10px] text-amber-200/50 block mb-1">
-                    {isEn ? 'Key Pairs' : 'Pares clave'}
+                    {isEn ? 'Prime Assets Now' : 'Activos Óptimos Ahora'}
                   </span>
-                  <div className="flex flex-wrap gap-1 justify-end">
+                  <div className="flex flex-wrap gap-1 justify-end max-w-[160px]">
                     {session.recommendedAssets.map((sym) => (
-                      <span
+                      <button
                         key={sym}
-                        className="px-1.5 py-0.5 rounded bg-amber-950/90 text-amber-300 border border-amber-700/60 text-[10px] font-bold"
+                        type="button"
+                        onClick={() => setSelectedSymbol(sym)}
+                        className="px-1.5 py-0.5 rounded bg-amber-950/90 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-700/60 text-[10px] font-bold transition"
                       >
                         {sym}
-                      </span>
+                      </button>
                     ))}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Right: Next Schedule Section Info */}
-            <div className="p-3 rounded-xl border bg-[#120c08] border-[#3b271a] flex items-center justify-between">
+            <div className="p-3 rounded-xl border bg-[#120c08] border-[#3b271a] flex items-center justify-between gap-2">
               <div>
                 <div className="text-[10px] uppercase font-mono text-amber-300/70 flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
@@ -246,44 +264,84 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                   {timerInfo.nextSessionFocus}
                 </div>
               </div>
+
+              {onOpenScanner && (
+                <button
+                  type="button"
+                  onClick={onOpenScanner}
+                  className="px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-[11px] flex items-center gap-1.5 shrink-0 shadow transition"
+                  title={
+                    isEn
+                      ? 'Scan all indices for highest win probability setup'
+                      : 'Escanear todos los índices y ver la entrada con mayor acierto'
+                  }
+                >
+                  <Radar className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'Best Setup' : 'Mejor Entrada'}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Tickers Grid: 4 Core Assets + Macro Variables */}
+      {/* Tickers Grid: 12 Primary CFD Indices, Gold & Forex + Macro Variables */}
       {(settings.showTickerGrid || settings.showMacroBar) && (
         <div>
           {settings.showTickerGrid && (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Globe className="w-4 h-4 text-amber-400" />
                   <h3 className="text-sm font-bold uppercase tracking-wider text-amber-100 font-mono">
-                    {isEn ? 'Live Quotes & Microstructure' : 'Cotizaciones & Microestructura'}
+                    {isEn
+                      ? 'Primary CFD Indices, Gold & Forex (Live Stream)'
+                      : 'Índices CFD Primarios, Oro & Forex (En Vivo)'}
                   </h3>
                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-700/60 text-[10px] font-mono font-bold text-emerald-300">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                    {isEn ? 'LIVE STREAM' : 'EN VIVO'}
+                    {isEn ? '12 ASSETS LIVE' : '12 ACTIVOS EN VIVO'}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
+
+                <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs">
+                  {[
+                    { id: 'ALL', labelEs: 'Todos (12)', labelEn: 'All (12)' },
+                    { id: 'US', labelEs: 'EE. UU. (4)', labelEn: 'US Indices (4)' },
+                    { id: 'EU_UK', labelEs: 'Europa/UK (4)', labelEn: 'Europe/UK (4)' },
+                    { id: 'ASIA_GLOBAL', labelEs: 'Asia/Oro/FX (4)', labelEn: 'Asia/Gold/FX (4)' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setRegionFilter(tab.id as any)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] border transition ${
+                        regionFilter === tab.id
+                          ? 'bg-amber-600 text-white border-amber-400 font-bold'
+                          : 'bg-[#18110b] text-amber-200/70 border-[#3b271a] hover:border-amber-600'
+                      }`}
+                    >
+                      {isEn ? tab.labelEn : tab.labelEs}
+                    </button>
+                  ))}
+
                   <button
                     onClick={onRefreshFeed}
-                    className="text-xs text-amber-200 hover:text-white flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#24170f] border border-[#4d3221] hover:border-amber-500 transition font-mono"
+                    className="text-xs text-amber-200 hover:text-white flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#24170f] border border-[#4d3221] hover:border-amber-500 transition font-mono"
                   >
                     <RefreshCw className="w-3 h-3 text-amber-400" />
-                    <span>{isEn ? 'Sync Now' : 'Sincronizar'}</span>
+                    <span>{isEn ? 'Sync' : 'Sincronizar'}</span>
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                {instruments.slice(0, 4).map((inst) => {
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {filteredTradeables.map((inst) => {
                   const isSelected = selectedSymbol === inst.symbol;
                   const isPositive = inst.change24h.startsWith('+');
                   const tickUp = inst.lastTickDirection === 'up';
                   const tickDown = inst.lastTickDirection === 'down';
+                  const decimals = inst.price < 10 ? 4 : inst.price > 15000 ? 1 : 2;
 
                   return (
                     <div
@@ -298,12 +356,15 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <span className="font-mono font-bold text-sm text-white">
                             {inst.symbol}
                           </span>
+                          <span className="text-[10px] font-mono text-amber-200/60 truncate">
+                            {inst.name}
+                          </span>
                           <span
-                            className={`w-2 h-2 rounded-full transition-colors duration-300 ${
+                            className={`w-2 h-2 rounded-full shrink-0 transition-colors duration-300 ${
                               tickUp
                                 ? 'bg-emerald-400 shadow-[0_0_8px_#10b981]'
                                 : tickDown
@@ -313,7 +374,7 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                           />
                         </div>
                         <span
-                          className={`text-[11px] font-mono font-medium px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                          className={`text-[11px] font-mono font-medium px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0 ${
                             isPositive
                               ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/40'
                               : 'bg-rose-950 text-rose-400 border border-rose-800/40'
@@ -340,12 +401,12 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                           }`}
                         >
                           {inst.price.toLocaleString(undefined, {
-                            minimumFractionDigits: inst.price < 10 ? 4 : 2,
-                            maximumFractionDigits: inst.price < 10 ? 4 : 2,
+                            minimumFractionDigits: decimals,
+                            maximumFractionDigits: decimals,
                           })}
                         </div>
                         <span className="text-[10px] font-mono text-amber-300/60">
-                          {tickUp ? '▲ ASK' : tickDown ? '▼ BID' : '• LIVE'}
+                          {inst.atr14 ? `ATR: ${inst.atr14}` : tickUp ? '▲ ASK' : '▼ BID'}
                         </span>
                       </div>
 
@@ -356,7 +417,8 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                             L:{' '}
                             <strong className="text-rose-300">
                               {inst.low24h.toLocaleString(undefined, {
-                                minimumFractionDigits: inst.price < 10 ? 4 : 2,
+                                minimumFractionDigits: decimals,
+                                maximumFractionDigits: decimals,
                               })}
                             </strong>
                           </span>
@@ -364,7 +426,8 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                             H:{' '}
                             <strong className="text-emerald-300">
                               {inst.high24h.toLocaleString(undefined, {
-                                minimumFractionDigits: inst.price < 10 ? 4 : 2,
+                                minimumFractionDigits: decimals,
+                                maximumFractionDigits: decimals,
                               })}
                             </strong>
                           </span>
@@ -377,7 +440,7 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                             e.stopPropagation();
                             onRequestEntry(inst.symbol);
                           }}
-                          className="text-[10px] px-2 py-1 rounded bg-amber-700 hover:bg-amber-600 text-white font-mono font-bold transition"
+                          className="text-[10px] px-2.5 py-1 rounded bg-amber-700 hover:bg-amber-600 text-white font-mono font-bold transition"
                         >
                           {isEn ? 'Get Entry' : 'Pedir Entrada'}
                         </button>
@@ -386,7 +449,7 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                             e.stopPropagation();
                             onGenerateReport(inst.symbol);
                           }}
-                          className="text-[10px] px-2 py-1 rounded bg-[#291b12] hover:bg-[#382519] text-amber-200 font-mono transition border border-[#422c1e]"
+                          className="text-[10px] px-2.5 py-1 rounded bg-[#291b12] hover:bg-[#382519] text-amber-200 font-mono transition border border-[#422c1e]"
                         >
                           {isEn ? 'Report' : 'Reporte'}
                         </button>
@@ -399,9 +462,9 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
           )}
 
           {/* Macro Variables Bar (DXY, US10Y, VIX) */}
-          {settings.showMacroBar && (
+          {settings.showMacroBar && macroInstruments.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-              {instruments.slice(4).map((inst) => {
+              {macroInstruments.map((inst) => {
                 const tickUp = inst.lastTickDirection === 'up';
                 const tickDown = inst.lastTickDirection === 'down';
                 return (

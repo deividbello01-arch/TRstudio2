@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { CandleCountdownTimer } from './CandleCountdownTimer';
 import { AppLanguage } from '../types/trading';
+import { INSTRUMENTS } from '../lib/instruments';
 
 interface TradingViewChartProps {
   currentSymbol: string;
@@ -77,7 +78,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
     }
   }, [drawings]);
 
-  // 100% unrestricted embed symbols that NEVER display "Only available on TradingView"
+  // Build unrestricted embed symbols for all 15 CFD indices, metals, forex & macro variables
   const symbolMap: Record<
     string,
     {
@@ -86,115 +87,17 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
       name: string;
       category: string;
     }
-  > = {
-    NAS100: {
-      primary: 'PEPPERSTONE:NAS100',
-      alternates: [
-        {
-          name: isEn ? 'Pepperstone NAS100 (Recommended)' : 'Pepperstone NAS100 (Recomendado)',
-          symbol: 'PEPPERSTONE:NAS100',
-        },
-        { name: 'Capital.com US100', symbol: 'CAPITALCOM:US100' },
-        { name: 'OANDA NAS100USD', symbol: 'OANDA:NAS100USD' },
-        { name: 'Forex.com US100', symbol: 'FX:US100' },
-      ],
-      name: 'Nasdaq 100 Index CFD',
-      category: isEn ? 'Tech Index' : 'Índice Tech',
-    },
-    US30: {
-      primary: 'PEPPERSTONE:US30',
-      alternates: [
-        {
-          name: isEn ? 'Pepperstone US30 (Recommended)' : 'Pepperstone US30 (Recomendado)',
-          symbol: 'PEPPERSTONE:US30',
-        },
-        { name: 'Capital.com US30', symbol: 'CAPITALCOM:US30' },
-        { name: 'OANDA US30USD', symbol: 'OANDA:US30USD' },
-        { name: 'Forex.com US30', symbol: 'FX:US30' },
-      ],
-      name: 'Dow Jones 30 Index CFD',
-      category: isEn ? 'Industrial Index' : 'Índice Industrial',
-    },
-    XAUUSD: {
-      primary: 'OANDA:XAUUSD',
-      alternates: [
-        {
-          name: isEn ? 'OANDA XAUUSD (Recommended)' : 'OANDA XAUUSD (Recomendado)',
-          symbol: 'OANDA:XAUUSD',
-        },
-        { name: 'Capital.com Gold', symbol: 'CAPITALCOM:GOLD' },
-        { name: 'Forex.com XAUUSD', symbol: 'FX:XAUUSD' },
-      ],
-      name: isEn ? 'Gold / US Dollar' : 'Oro / Dólar Estadounidense',
-      category: isEn ? 'Precious Metals' : 'Metales Preciosos',
-    },
-    EURUSD: {
-      primary: 'FX:EURUSD',
-      alternates: [
-        {
-          name: isEn ? 'FXCM EURUSD (Recommended)' : 'FXCM EURUSD (Recomendado)',
-          symbol: 'FX:EURUSD',
-        },
-        { name: 'OANDA EURUSD', symbol: 'OANDA:EURUSD' },
-        { name: 'Capital.com EURUSD', symbol: 'CAPITALCOM:EURUSD' },
-      ],
-      name: isEn ? 'Euro / US Dollar' : 'Euro / Dólar Estadounidense',
-      category: isEn ? 'Forex Majors' : 'Divisas Forex',
-    },
-    DXY: {
-      primary: 'CAPITALCOM:DXY',
-      alternates: [
-        {
-          name: isEn ? 'Capital.com DXY (Live Free)' : 'Capital.com DXY (Libre en Vivo)',
-          symbol: 'CAPITALCOM:DXY',
-        },
-        { name: 'AMEX UUP (US Dollar Index ETF)', symbol: 'AMEX:UUP' },
-      ],
-      name: isEn ? 'US Dollar Index' : 'Índice Dólar Americano',
-      category: isEn ? 'Macro Variable' : 'Macro Variable',
-    },
-    US10Y: {
-      primary: 'AMEX:TBT',
-      alternates: [
-        {
-          name: isEn
-            ? 'US Treasury Yield Proxy (AMEX:TBT Intraday)'
-            : 'Rendimiento Tesoro EE. UU. (AMEX:TBT Intradía)',
-          symbol: 'AMEX:TBT',
-        },
-        {
-          name: isEn
-            ? '7-10Y Treasury Bond (NASDAQ:IEF Live)'
-            : 'Bono Tesoro 7-10 Años (NASDAQ:IEF En Vivo)',
-          symbol: 'NASDAQ:IEF',
-        },
-        {
-          name: isEn
-            ? '20+Y Treasury Bond (NASDAQ:TLT Live)'
-            : 'Bono Tesoro 20+ Años (NASDAQ:TLT En Vivo)',
-          symbol: 'NASDAQ:TLT',
-        },
-        {
-          name: isEn ? 'Official Fed 10Y Rate (FRED:DGS10)' : 'Tasa Oficial Fed 10Y (FRED:DGS10)',
-          symbol: 'FRED:DGS10',
-        },
-      ],
-      name: isEn ? 'US 10Y Treasury Bonds & Yield' : 'Bonos y Rendimiento Tesoro EE. UU. 10Y',
-      category: isEn ? 'Interest Rates' : 'Tasas de Interés',
-    },
-    VIX: {
-      primary: 'CAPITALCOM:VIX',
-      alternates: [
-        {
-          name: isEn ? 'Capital.com VIX (Live Free)' : 'Capital.com VIX (Libre en Vivo)',
-          symbol: 'CAPITALCOM:VIX',
-        },
-        { name: 'AMEX VIXY (VIX Short-Term Futures)', symbol: 'AMEX:VIXY' },
-      ],
-      name: isEn ? 'VIX Volatility Index' : 'Índice de Volatilidad VIX',
-      category: isEn ? 'Volatility' : 'Volatilidad',
-    },
-  };
+  > = Object.fromEntries(
+    INSTRUMENTS.map((spec) => [
+      spec.symbol,
+      {
+        primary: spec.chart.primary,
+        alternates: spec.chart.alternates,
+        name: isEn ? spec.nameEn : spec.nameEs,
+        category: spec.kind.toUpperCase(),
+      },
+    ])
+  );
 
   const selectedConfig = symbolMap[currentSymbol] || symbolMap.NAS100;
 
