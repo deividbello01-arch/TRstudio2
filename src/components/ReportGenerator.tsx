@@ -11,8 +11,8 @@ import {
   Clock, 
   Newspaper
 } from 'lucide-react';
-import { TradingReport, KillzoneSession, AppLanguage } from '../types/trading';
-import { TRADEABLE_INSTRUMENTS } from '../lib/instruments';
+import { TradingReport, KillzoneSession, AppLanguage, InstrumentMarketMode } from '../types/trading';
+import { getEnabledTradeableInstruments, FUTURES_CONTRACT_MAP } from '../lib/instruments';
 
 interface ReportGeneratorProps {
   initialAsset?: string;
@@ -22,14 +22,19 @@ interface ReportGeneratorProps {
   useOnlineOnly?: boolean;
   onOpenKnowledgeTab?: () => void;
   language?: AppLanguage;
+  marketMode?: InstrumentMarketMode;
+  enabledSymbols?: string[];
 }
 
 export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
   initialAsset = 'NAS100',
   customDocContent,
   language = 'es',
+  marketMode = 'all_programmed',
+  enabledSymbols,
 }) => {
   const isEn = language === 'en';
+  const visibleInstruments = getEnabledTradeableInstruments(enabledSymbols, marketMode);
   const [selectedAsset, setSelectedAsset] = useState<string>(initialAsset);
   const [timeframe, setTimeframe] = useState<string>('Intradía (4H / 1H / 30M / 15M)');
   const [focusArea, setFocusArea] = useState<string>('Niveles Operativos & Sesión');
@@ -48,11 +53,31 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({
   const [copied, setCopied] = useState<boolean>(false);
 
   React.useEffect(() => {
-    if (initialAsset) setSelectedAsset(initialAsset);
-  }, [initialAsset]);
+    if (
+      initialAsset &&
+      (initialAsset === 'TODOS' || visibleInstruments.some((i) => i.symbol === initialAsset))
+    ) {
+      setSelectedAsset(initialAsset);
+    } else if (
+      selectedAsset !== 'TODOS' &&
+      !visibleInstruments.some((i) => i.symbol === selectedAsset) &&
+      visibleInstruments.length > 0
+    ) {
+      setSelectedAsset(visibleInstruments[0].symbol);
+    }
+  }, [initialAsset, enabledSymbols, selectedAsset, visibleInstruments]);
 
   const assets = [
-    ...TRADEABLE_INSTRUMENTS.map((i) => ({ value: i.symbol, label: i.symbol })),
+    ...visibleInstruments.map((i) => {
+      const fut = FUTURES_CONTRACT_MAP[i.symbol];
+      return {
+        value: i.symbol,
+        label:
+          marketMode === 'futures_only' && fut
+            ? `${i.symbol} (${fut.futuresTicker})`
+            : i.symbol,
+      };
+    }),
     { value: 'TODOS', label: isEn ? 'ALL' : 'TODOS' },
   ];
 

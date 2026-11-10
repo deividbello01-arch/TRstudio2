@@ -18,12 +18,21 @@ import {
   ChevronUp,
   Layers,
 } from 'lucide-react';
-import { TradeSetup, ScannerResponse, AppLanguage } from '../types/trading';
+import {
+  TradeSetup,
+  ScannerResponse,
+  AppLanguage,
+  InstrumentMarketMode,
+  ALL_PROGRAMMED_TRADEABLE_SYMBOLS,
+} from '../types/trading';
+import { FUTURES_CONTRACT_MAP } from '../lib/instruments';
 
 interface MultiIndexScannerProps {
   defaultBalance?: number;
   defaultRisk?: number;
   language?: AppLanguage;
+  marketMode?: InstrumentMarketMode;
+  enabledSymbols?: string[];
   onSelectAssetInChart?: (symbol: string) => void;
   onOpenInSetupEngine?: (symbol: string) => void;
 }
@@ -32,6 +41,8 @@ export const MultiIndexScanner: React.FC<MultiIndexScannerProps> = ({
   defaultBalance = 10000,
   defaultRisk = 0.50,
   language = 'es',
+  marketMode = 'all_programmed',
+  enabledSymbols,
   onSelectAssetInChart,
   onOpenInSetupEngine,
 }) => {
@@ -134,15 +145,41 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
     };
   };
 
+  const activeEnabledSet = new Set(
+    Array.isArray(enabledSymbols) && enabledSymbols.length > 0
+      ? enabledSymbols
+      : ALL_PROGRAMMED_TRADEABLE_SYMBOLS
+  );
+
   const filterButtons = [
-    { id: 'ALL', labelEs: 'Todos los CFD (12)', labelEn: 'All CFDs (12)' },
+    {
+      id: 'ALL',
+      labelEs:
+        marketMode === 'futures_only'
+          ? `Todos los Futuros Activos (${activeEnabledSet.size})`
+          : marketMode === 'cfd_only'
+          ? `Todos los CFD Activos (${activeEnabledSet.size})`
+          : `Todos los Activos Visibles (${activeEnabledSet.size})`,
+      labelEn:
+        marketMode === 'futures_only'
+          ? `All Active Futures (${activeEnabledSet.size})`
+          : marketMode === 'cfd_only'
+          ? `All Active CFDs (${activeEnabledSet.size})`
+          : `All Visible Assets (${activeEnabledSet.size})`,
+    },
     { id: 'INDICES', labelEs: 'Solo Índices Primarios (10)', labelEn: 'Primary Indices Only (10)' },
     { id: 'US_INDICES', labelEs: 'Índices EE. UU. (NAS100, US500, US30, US2000)', labelEn: 'US Indices (NAS100, US500, US30, US2000)' },
     { id: 'EU_ASIA_INDICES', labelEs: 'Europa & Asia (GER40, UK100, EU50, JP225...)', labelEn: 'Europe & Asia (GER40, UK100, EU50, JP225...)' },
     { id: 'METALS_FX', labelEs: 'Oro & Forex (XAUUSD, EURUSD)', labelEn: 'Gold & Forex (XAUUSD, EURUSD)' },
   ];
 
-  const best = scanData?.bestSetup;
+  const filteredRankedSetups = scanData
+    ? scanData.rankedSetups.filter((s) => activeEnabledSet.has(s.asset)).length > 0
+      ? scanData.rankedSetups.filter((s) => activeEnabledSet.has(s.asset))
+      : scanData.rankedSetups
+    : [];
+
+  const best = filteredRankedSetups[0] || scanData?.bestSetup;
   const bestColors = best ? getBadgeColors(best.recommendationVerdict) : null;
 
   return (
@@ -507,15 +544,15 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
       )}
 
       {/* Full Ranked Table of All Scanned Indices & Assets */}
-      {scanData && scanData.rankedSetups.length > 0 && (
+      {scanData && filteredRankedSetups.length > 0 && (
         <div className="bg-[#18110b] border border-[#3b271a] rounded-xl overflow-hidden shadow-xl">
           <div className="p-4 bg-[#120c08] border-b border-[#3b271a] flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-amber-400" />
               <h3 className="text-xs sm:text-sm font-bold font-mono uppercase text-white">
                 {isEn
-                  ? `Comparative Ranking of All Scanned Setups (${scanData.rankedSetups.length} Assets)`
-                  : `Tabla Comparativa de Entradas por Probabilidad de Acierto (${scanData.rankedSetups.length} Activos)`}
+                  ? `Comparative Ranking of All Scanned Setups (${filteredRankedSetups.length} Assets)`
+                  : `Tabla Comparativa de Entradas por Probabilidad de Acierto (${filteredRankedSetups.length} Activos)`}
               </h3>
             </div>
             <span className="text-[11px] font-mono text-amber-200/60">
@@ -526,9 +563,10 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
           </div>
 
           <div className="divide-y divide-[#3b271a]">
-            {scanData.rankedSetups.map((item, idx) => {
+            {filteredRankedSetups.map((item, idx) => {
               const colors = getBadgeColors(item.recommendationVerdict);
               const isExpanded = expandedSymbol === item.asset;
+              const fut = FUTURES_CONTRACT_MAP[item.asset];
 
               return (
                 <div key={item.asset} className="transition hover:bg-[#1e140d]/60">
@@ -538,9 +576,9 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
                     }
                     className="p-3.5 sm:px-5 cursor-pointer flex flex-wrap items-center justify-between gap-3"
                   >
-                    <div className="flex items-center gap-3 min-w-[210px]">
+                    <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
                       <span
-                        className={`w-7 h-7 rounded-lg font-mono font-black text-xs flex items-center justify-center border ${
+                        className={`w-7 h-7 rounded-lg font-mono font-black text-xs flex items-center justify-center border shrink-0 ${
                           idx === 0
                             ? 'bg-amber-500 text-slate-950 border-amber-300'
                             : idx < 3
@@ -552,7 +590,7 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
                       </span>
 
                       <span
-                        className={`px-2 py-0.5 rounded font-mono font-black text-xs ${
+                        className={`px-2 py-0.5 rounded font-mono font-black text-xs shrink-0 ${
                           item.action === 'BUY'
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-600/50'
                             : 'bg-rose-500/20 text-rose-300 border border-rose-600/50'
@@ -561,15 +599,24 @@ ${isEn ? 'LOTS' : 'LOTAJE'}: ${setup.propFirmRiskCalculation.recommendedLots} Lo
                         {item.action}
                       </span>
 
-                      <div>
-                        <div className="flex items-center gap-1.5 font-mono">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 font-mono flex-wrap">
                           <span className="font-bold text-sm text-white">{item.asset}</span>
+                          {marketMode === 'futures_only' && fut && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-700/60 font-bold">
+                              {fut.futuresTicker}
+                            </span>
+                          )}
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#120c08] text-amber-300/80 border border-[#3b271a]">
                             {item.region}
                           </span>
                         </div>
-                        <div className="text-[11px] text-amber-200/60 truncate max-w-[180px]">
-                          {item.assetName}
+                        <div className="text-[11px] text-amber-200/60 truncate max-w-[200px]">
+                          {marketMode === 'futures_only' && fut
+                            ? isEn
+                              ? fut.nameEn
+                              : fut.nameEs
+                            : item.assetName}
                         </div>
                       </div>
                     </div>

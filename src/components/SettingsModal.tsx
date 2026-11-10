@@ -11,8 +11,16 @@ import {
   Sparkles,
   Clock,
   DollarSign,
+  Check,
 } from 'lucide-react';
-import { AppSettings, AppTheme, DEFAULT_APP_SETTINGS } from '../types/trading';
+import {
+  AppSettings,
+  AppTheme,
+  InstrumentMarketMode,
+  ALL_PROGRAMMED_TRADEABLE_SYMBOLS,
+  ONLY_INDEX_SYMBOLS,
+} from '../types/trading';
+import { TRADEABLE_INSTRUMENTS, FUTURES_CONTRACT_MAP } from '../lib/instruments';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -32,6 +40,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   const isEn = settings.language === 'en';
+  const currentMarketMode: InstrumentMarketMode =
+    settings.instrumentMarketMode || 'all_programmed';
+  const currentEnabledSymbols: string[] =
+    Array.isArray(settings.enabledSymbols) && settings.enabledSymbols.length > 0
+      ? settings.enabledSymbols
+      : ALL_PROGRAMMED_TRADEABLE_SYMBOLS;
+
+  const handleToggleSymbol = (symbol: string) => {
+    const exists = currentEnabledSymbols.includes(symbol);
+    if (exists) {
+      // Keep at least 1 symbol active so the terminal is never empty
+      if (currentEnabledSymbols.length <= 1) return;
+      onUpdateSettings({
+        enabledSymbols: currentEnabledSymbols.filter((s) => s !== symbol),
+      });
+    } else {
+      // Preserve canonical order from ALL_PROGRAMMED_TRADEABLE_SYMBOLS
+      const nextSet = new Set([...currentEnabledSymbols, symbol]);
+      const ordered = ALL_PROGRAMMED_TRADEABLE_SYMBOLS.filter((s) => nextSet.has(s));
+      onUpdateSettings({ enabledSymbols: ordered });
+    }
+  };
 
   const themes: Array<{ id: AppTheme; nameEs: string; nameEn: string; previewClass: string }> = [
     {
@@ -129,7 +159,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
       <div className="bg-[#18110b] border border-[#3b271a] rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Modal Header */}
         <div className="p-4 sm:p-5 border-b border-[#3b271a] flex items-center justify-between bg-[#120d09]">
@@ -143,8 +173,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </h2>
               <p className="text-xs text-amber-200/60">
                 {isEn
-                  ? 'Customize colors, language, minimalist mode, and visible sections.'
-                  : 'Cambia colores, idioma, modo minimalista y activa o desactiva cualquier sección.'}
+                  ? 'Customize colors, CFD/Futures mode, visible indices, language, and layout.'
+                  : 'Configura modo CFD/Futuros, elige qué índices salen, colores, idioma y diseño.'}
               </p>
             </div>
           </div>
@@ -159,7 +189,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 overflow-y-auto space-y-6 text-xs">
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-6 text-xs">
           {/* 1. Quick Minimalist Mode Banner */}
           <div className="p-4 rounded-xl bg-gradient-to-r from-amber-950/60 to-[#120c08] border border-amber-600/50 flex items-center justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -190,8 +220,209 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
           </div>
 
-          {/* 2. App Color Theme */}
-          <div className="space-y-2.5">
+          {/* 2. NEW SECTION: Market Mode (Solo CFD / Todos los Índices Programados / Solo Futuros) + Custom Index Picker */}
+          <div className="pt-2 border-t border-[#3b271a] space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-xs font-bold uppercase font-mono text-amber-300 flex items-center gap-1.5">
+                <Sliders className="w-4 h-4 text-amber-400" />
+                <span>
+                  {isEn
+                    ? 'Market Mode (CFD Only / All Programmed Indices / Futures Only)'
+                    : 'Modo de Instrumentos (Solo CFD / Todos los Índices / Solo Futuros)'}
+                </span>
+              </h3>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950/90 text-amber-300 border border-amber-700/60 font-bold">
+                {currentEnabledSymbols.length} / {ALL_PROGRAMMED_TRADEABLE_SYMBOLS.length}{' '}
+                {isEn ? 'active' : 'activos visibles'}
+              </span>
+            </div>
+
+            {/* 3 Mode Selector Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {[
+                {
+                  id: 'cfd_only' as InstrumentMarketMode,
+                  titleEs: 'Solo CFD',
+                  titleEn: 'CFD Only',
+                  descEs: 'Especificaciones y gráficos CFD ($1/pto en índices, lotes MT4/MT5/cTrader).',
+                  descEn: 'CFD specs & broker feeds ($1/pt index CFDs, standard MT4/MT5 lots).',
+                  badge: 'CFD',
+                },
+                {
+                  id: 'all_programmed' as InstrumentMarketMode,
+                  titleEs: 'Todos los Índices Programados',
+                  titleEn: 'All Programmed Indices',
+                  descEs: 'Catálogo completo programado. Elige abajo exactamente cuáles quieres que salgan.',
+                  descEn: 'Full programmed catalog. Choose below exactly which indices appear.',
+                  badge: 'CUSTOM / ALL',
+                },
+                {
+                  id: 'futures_only' as InstrumentMarketMode,
+                  titleEs: 'Solo Futuros',
+                  titleEn: 'Futures Only',
+                  descEs: 'Contratos de Futuros CME / Eurex / COMEX (NQ, ES, YM, RTY, FDAX, GC, 6E).',
+                  descEn: 'CME / Eurex / COMEX Futures contracts (NQ, ES, YM, RTY, FDAX, GC, 6E).',
+                  badge: 'FUTUROS',
+                },
+              ].map((m) => {
+                const isSelected = currentMarketMode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => onUpdateSettings({ instrumentMarketMode: m.id })}
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between gap-1.5 ${
+                      isSelected
+                        ? 'bg-[#2b1c13] border-amber-400 text-white ring-1 ring-amber-400/50 shadow-md'
+                        : 'bg-[#120c08] border-[#3b271a] text-amber-200/70 hover:border-amber-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 w-full">
+                      <span className="font-mono font-bold text-xs text-white">
+                        {isEn ? m.titleEn : m.titleEs}
+                      </span>
+                      <span
+                        className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                          isSelected
+                            ? 'bg-amber-600 text-white border-amber-300'
+                            : 'bg-[#18110b] text-amber-300/70 border-[#3b271a]'
+                        }`}
+                      >
+                        {m.badge}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-200/60 leading-snug">
+                      {isEn ? m.descEn : m.descEs}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Individual Index & Asset Picker */}
+            <div className="p-3.5 rounded-xl bg-[#120c08] border border-[#3b271a] space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-bold text-white font-mono">
+                    {isEn
+                      ? 'Choose which Programmed Indices & Assets appear across TRstudio:'
+                      : 'Elige cuáles Índices y Activos Programados quieres que salgan:'}
+                  </div>
+                  <div className="text-[11px] text-amber-200/60">
+                    {isEn
+                      ? 'Click any instrument below to enable or hide it in Terminal, Scanner, Chart, and Calculator.'
+                      : 'Marca o desmarca los índices que deseas ver en la Terminal, Escáner, Gráfico y Calculadora.'}
+                  </div>
+                </div>
+
+                {/* Quick Filter Presets */}
+                <div className="flex flex-wrap items-center gap-1 font-mono text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateSettings({ enabledSymbols: ALL_PROGRAMMED_TRADEABLE_SYMBOLS })
+                    }
+                    className="px-2 py-1 rounded bg-[#24170f] hover:bg-amber-600 text-amber-200 hover:text-white border border-[#4d3221] transition font-bold"
+                  >
+                    {isEn ? 'All (12)' : 'Todos (12)'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateSettings({ enabledSymbols: ONLY_INDEX_SYMBOLS })}
+                    className="px-2 py-1 rounded bg-[#24170f] hover:bg-amber-600 text-amber-200 hover:text-white border border-[#4d3221] transition font-bold"
+                  >
+                    {isEn ? 'Only 10 Indices' : 'Solo 10 Índices'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateSettings({
+                        enabledSymbols: ['NAS100', 'US500', 'US30', 'US2000'],
+                      })
+                    }
+                    className="px-2 py-1 rounded bg-[#24170f] hover:bg-amber-600 text-amber-200 hover:text-white border border-[#4d3221] transition"
+                  >
+                    {isEn ? 'US Indices (4)' : 'EE. UU. (4)'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateSettings({
+                        enabledSymbols: ['GER40', 'UK100', 'EU50', 'FRA40', 'JP225', 'HK50'],
+                      })
+                    }
+                    className="px-2 py-1 rounded bg-[#24170f] hover:bg-amber-600 text-amber-200 hover:text-white border border-[#4d3221] transition"
+                  >
+                    {isEn ? 'EU & Asia (6)' : 'Europa/Asia (6)'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateSettings({
+                        enabledSymbols: ['NAS100', 'US500', 'US30', 'GER40', 'XAUUSD', 'EURUSD'],
+                      })
+                    }
+                    className="px-2 py-1 rounded bg-[#24170f] hover:bg-amber-600 text-amber-200 hover:text-white border border-[#4d3221] transition"
+                  >
+                    {isEn ? 'Top 6 + Gold' : 'Principales + Oro (6)'}
+                  </button>
+                </div>
+              </div>
+
+              {/* 12 Checkable Instrument Chips */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {TRADEABLE_INSTRUMENTS.map((inst) => {
+                  const isChecked = currentEnabledSymbols.includes(inst.symbol);
+                  const futInfo = FUTURES_CONTRACT_MAP[inst.symbol];
+                  const modeSubLabel =
+                    currentMarketMode === 'futures_only' && futInfo
+                      ? `${futInfo.futuresTicker} (${futInfo.exchange})`
+                      : currentMarketMode === 'cfd_only'
+                      ? `CFD • ${inst.quoteCcy}`
+                      : futInfo
+                      ? `CFD / ${futInfo.futuresTicker}`
+                      : inst.region;
+
+                  return (
+                    <button
+                      key={inst.symbol}
+                      type="button"
+                      onClick={() => handleToggleSymbol(inst.symbol)}
+                      className={`p-2 rounded-xl border text-left transition flex items-center justify-between gap-2 font-mono ${
+                        isChecked
+                          ? 'bg-emerald-950/50 border-emerald-500/70 text-white'
+                          : 'bg-[#18110b]/60 border-[#3b271a] text-amber-200/40 hover:border-[#573926]'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-xs">{inst.symbol}</span>
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-black/40 text-amber-300/90 truncate">
+                            {modeSubLabel}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-amber-200/60 truncate">
+                          {isEn ? inst.nameEn : inst.nameEs}
+                        </div>
+                      </div>
+                      <span
+                        className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ${
+                          isChecked
+                            ? 'bg-emerald-500 border-emerald-300 text-slate-950'
+                            : 'bg-[#120c08] border-[#3b271a]'
+                        }`}
+                      >
+                        {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* 3. App Color Theme */}
+          <div className="pt-2 border-t border-[#3b271a] space-y-2.5">
             <h3 className="text-xs font-bold uppercase font-mono text-amber-300 flex items-center gap-1.5">
               <Palette className="w-4 h-4 text-amber-400" />
               <span>{isEn ? 'App Theme & Color' : 'Color y Tema de la App'}</span>

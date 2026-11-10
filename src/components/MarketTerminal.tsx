@@ -8,7 +8,8 @@ import {
   Timer,
   Radar,
 } from 'lucide-react';
-import { InstrumentQuote, KillzoneSession, AppSettings } from '../types/trading';
+import { InstrumentQuote, KillzoneSession, AppSettings, ALL_PROGRAMMED_TRADEABLE_SYMBOLS } from '../types/trading';
+import { FUTURES_CONTRACT_MAP } from '../lib/instruments';
 import { MiniTradingChart } from './MiniTradingChart';
 import { TradingViewChart } from './TradingViewChart';
 
@@ -189,8 +190,29 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
     return () => clearInterval(interval);
   }, [isEn, is12h]);
 
-  const tradeableInstruments = instruments.filter((i) => i.category !== 'Macro Variable');
+  const marketMode = settings.instrumentMarketMode || 'all_programmed';
+  const enabledList =
+    Array.isArray(settings.enabledSymbols) && settings.enabledSymbols.length > 0
+      ? settings.enabledSymbols
+      : ALL_PROGRAMMED_TRADEABLE_SYMBOLS;
+
+  const allTradeableQuotes = instruments.filter((i) => i.category !== 'Macro Variable');
+  const tradeableInstruments =
+    allTradeableQuotes.filter((i) => enabledList.includes(i.symbol)).length > 0
+      ? allTradeableQuotes.filter((i) => enabledList.includes(i.symbol))
+      : allTradeableQuotes;
   const macroInstruments = instruments.filter((i) => i.category === 'Macro Variable');
+
+  useEffect(() => {
+    if (
+      selectedSymbol &&
+      !enabledList.includes(selectedSymbol) &&
+      !['DXY', 'US10Y', 'VIX'].includes(selectedSymbol) &&
+      tradeableInstruments.length > 0
+    ) {
+      setSelectedSymbol(tradeableInstruments[0].symbol);
+    }
+  }, [enabledList, selectedSymbol, tradeableInstruments]);
 
   const filteredTradeables = tradeableInstruments.filter((inst) => {
     if (regionFilter === 'US') return inst.region === 'US';
@@ -201,7 +223,22 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
   });
 
   const selectedInstrument =
-    instruments.find((i) => i.symbol === selectedSymbol) || instruments[0];
+    instruments.find((i) => i.symbol === selectedSymbol) ||
+    tradeableInstruments[0] ||
+    instruments[0];
+
+  const modeHeaderTitle =
+    marketMode === 'futures_only'
+      ? isEn
+        ? 'Institutional Futures Contracts (CME / Eurex / ICE / COMEX)'
+        : 'Contratos de Futuros Institucionales (CME / Eurex / ICE / COMEX)'
+      : marketMode === 'cfd_only'
+      ? isEn
+        ? 'CFD Only Mode — Primary Indices, Gold & Forex (Live Stream)'
+        : 'Modo Solo CFD — Índices Primarios, Oro & Forex (En Vivo)'
+      : isEn
+      ? 'Programmed Indices, Gold & Forex (Live Stream)'
+      : 'Índices Programados, Oro & Forex (En Vivo)';
 
   return (
     <div className={settings.compactCards ? 'space-y-3' : 'space-y-6'}>
@@ -261,16 +298,18 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                     {isEn ? 'Prime Assets Now' : 'Activos Óptimos Ahora'}
                   </span>
                   <div className="flex flex-wrap gap-1 justify-end max-w-[160px]">
-                    {session.recommendedAssets.map((sym) => (
-                      <button
-                        key={sym}
-                        type="button"
-                        onClick={() => setSelectedSymbol(sym)}
-                        className="px-1.5 py-0.5 rounded bg-amber-950/90 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-700/60 text-[10px] font-bold transition"
-                      >
-                        {sym}
-                      </button>
-                    ))}
+                    {session.recommendedAssets
+                      .filter((sym) => enabledList.includes(sym))
+                      .map((sym) => (
+                        <button
+                          key={sym}
+                          type="button"
+                          onClick={() => setSelectedSymbol(sym)}
+                          className="px-1.5 py-0.5 rounded bg-amber-950/90 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-700/60 text-[10px] font-bold transition"
+                        >
+                          {sym}
+                        </button>
+                      ))}
                   </div>
                 </div>
               )}
@@ -312,7 +351,7 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
         </div>
       )}
 
-      {/* Tickers Grid: 12 Primary CFD Indices, Gold & Forex + Macro Variables */}
+      {/* Tickers Grid: Filtered by Settings (CFD Only / All Programmed / Futures Only) */}
       {(settings.showTickerGrid || settings.showMacroBar) && (
         <div>
           {settings.showTickerGrid && (
@@ -321,22 +360,47 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                 <div className="flex items-center gap-2 flex-wrap">
                   <Globe className="w-4 h-4 text-amber-400" />
                   <h3 className="text-sm font-bold uppercase tracking-wider text-amber-100 font-mono">
-                    {isEn
-                      ? 'Primary CFD Indices, Gold & Forex (Live Stream)'
-                      : 'Índices CFD Primarios, Oro & Forex (En Vivo)'}
+                    {modeHeaderTitle}
                   </h3>
                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-700/60 text-[10px] font-mono font-bold text-emerald-300">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                    {isEn ? '12 ASSETS LIVE' : '12 ACTIVOS EN VIVO'}
+                    {tradeableInstruments.length}{' '}
+                    {marketMode === 'futures_only'
+                      ? isEn
+                        ? 'FUTURES LIVE'
+                        : 'FUTUROS EN VIVO'
+                      : marketMode === 'cfd_only'
+                      ? isEn
+                        ? 'CFDs LIVE'
+                        : 'CFDs EN VIVO'
+                      : isEn
+                      ? 'ASSETS LIVE'
+                      : 'ACTIVOS EN VIVO'}
                   </span>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs">
                   {[
-                    { id: 'ALL', labelEs: 'Todos (12)', labelEn: 'All (12)' },
-                    { id: 'US', labelEs: 'EE. UU. (4)', labelEn: 'US Indices (4)' },
-                    { id: 'EU_UK', labelEs: 'Europa/UK (4)', labelEn: 'Europe/UK (4)' },
-                    { id: 'ASIA_GLOBAL', labelEs: 'Asia/Oro/FX (4)', labelEn: 'Asia/Gold/FX (4)' },
+                    {
+                      id: 'ALL',
+                      labelEs: `Todos (${tradeableInstruments.length})`,
+                      labelEn: `All (${tradeableInstruments.length})`,
+                    },
+                    {
+                      id: 'US',
+                      labelEs: `EE. UU. (${tradeableInstruments.filter((i) => i.region === 'US').length})`,
+                      labelEn: `US (${tradeableInstruments.filter((i) => i.region === 'US').length})`,
+                    },
+                    {
+                      id: 'EU_UK',
+                      labelEs: `Europa/UK (${tradeableInstruments.filter((i) => i.region === 'EU' || i.region === 'UK').length})`,
+                      labelEn: `Europe/UK (${tradeableInstruments.filter((i) => i.region === 'EU' || i.region === 'UK').length})`,
+                    },
+                    {
+                      id: 'ASIA_GLOBAL',
+                      labelEs: `Asia/Oro/FX (${tradeableInstruments.filter((i) => i.region === 'ASIA' || i.region === 'GLOBAL').length})`,
+                      labelEn: `Asia/Gold/FX (${tradeableInstruments.filter((i) => i.region === 'ASIA' || i.region === 'GLOBAL').length})`,
+                    },
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -369,6 +433,19 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                   const tickUp = inst.lastTickDirection === 'up';
                   const tickDown = inst.lastTickDirection === 'down';
                   const decimals = inst.price < 10 ? 4 : inst.price > 15000 ? 1 : 2;
+                  const futInfo = FUTURES_CONTRACT_MAP[inst.symbol];
+                  const displayName =
+                    marketMode === 'futures_only' && futInfo
+                      ? isEn
+                        ? futInfo.nameEn
+                        : futInfo.nameEs
+                      : inst.name;
+                  const modeBadge =
+                    marketMode === 'futures_only' && futInfo
+                      ? `${futInfo.futuresTicker} • ${futInfo.exchange}`
+                      : marketMode === 'cfd_only'
+                      ? 'CFD'
+                      : null;
 
                   return (
                     <div
@@ -382,13 +459,18 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
                           : 'bg-[#18110b] border-[#3b271a] hover:border-[#573926] hover:bg-[#20150e]'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-1">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="font-mono font-bold text-sm text-white">
+                          <span className="font-mono font-bold text-sm text-white shrink-0">
                             {inst.symbol}
                           </span>
+                          {modeBadge && (
+                            <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-700/60 shrink-0">
+                              {modeBadge}
+                            </span>
+                          )}
                           <span className="text-[10px] font-mono text-amber-200/60 truncate">
-                            {inst.name}
+                            {displayName}
                           </span>
                           <span
                             className={`w-2 h-2 rounded-full shrink-0 transition-colors duration-300 ${
@@ -576,6 +658,8 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
               currentSymbol={selectedSymbol}
               onSymbolChange={(sym) => setSelectedSymbol(sym)}
               language={settings.language}
+              marketMode={settings.instrumentMarketMode}
+              enabledSymbols={settings.enabledSymbols}
             />
           ) : (
             selectedInstrument && (

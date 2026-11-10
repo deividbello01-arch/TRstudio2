@@ -582,3 +582,162 @@ export function formatDistance(distance: number, spec: InstrumentSpec, isEn = fa
   const pts = distance.toFixed(spec.decimals === 0 ? 0 : 1);
   return `${pts} ${isEn ? 'pts' : 'pts'}`;
 }
+
+export interface FuturesContractInfo {
+  futuresTicker: string;
+  microTicker: string;
+  exchange: string;
+  nameEs: string;
+  nameEn: string;
+  /** Standard futures point value in quote currency (e.g. $20/pt for NQ, $50/pt for ES) */
+  stdPointValue: number;
+  /** Micro futures point value in quote currency (e.g. $2/pt for MNQ, $5/pt for MES) */
+  microPointValue: number;
+}
+
+export const FUTURES_CONTRACT_MAP: Record<string, FuturesContractInfo> = {
+  NAS100: {
+    futuresTicker: 'NQ1!',
+    microTicker: 'MNQ1!',
+    exchange: 'CME',
+    nameEs: 'Futuro E-mini Nasdaq 100 (NQ / MNQ)',
+    nameEn: 'E-mini Nasdaq 100 Futures (NQ / MNQ)',
+    stdPointValue: 20,
+    microPointValue: 2,
+  },
+  US500: {
+    futuresTicker: 'ES1!',
+    microTicker: 'MES1!',
+    exchange: 'CME',
+    nameEs: 'Futuro E-mini S&P 500 (ES / MES)',
+    nameEn: 'E-mini S&P 500 Futures (ES / MES)',
+    stdPointValue: 50,
+    microPointValue: 5,
+  },
+  US30: {
+    futuresTicker: 'YM1!',
+    microTicker: 'MYM1!',
+    exchange: 'CBOT',
+    nameEs: 'Futuro E-mini Dow 30 (YM / MYM)',
+    nameEn: 'E-mini Dow 30 Futures (YM / MYM)',
+    stdPointValue: 5,
+    microPointValue: 0.5,
+  },
+  US2000: {
+    futuresTicker: 'RTY1!',
+    microTicker: 'M2K1!',
+    exchange: 'CME',
+    nameEs: 'Futuro E-mini Russell 2000 (RTY / M2K)',
+    nameEn: 'E-mini Russell 2000 Futures (RTY / M2K)',
+    stdPointValue: 50,
+    microPointValue: 5,
+  },
+  GER40: {
+    futuresTicker: 'FDAX1!',
+    microTicker: 'FDXM1!',
+    exchange: 'EUREX',
+    nameEs: 'Futuro DAX 40 (FDAX / FDXM)',
+    nameEn: 'DAX 40 Futures (FDAX / FDXM)',
+    stdPointValue: 25,
+    microPointValue: 5,
+  },
+  UK100: {
+    futuresTicker: 'Z1!',
+    microTicker: 'Z1!',
+    exchange: 'ICE',
+    nameEs: 'Futuro FTSE 100 (ICE Z)',
+    nameEn: 'FTSE 100 Futures (ICE Z)',
+    stdPointValue: 10,
+    microPointValue: 10,
+  },
+  EU50: {
+    futuresTicker: 'FESX1!',
+    microTicker: 'FSXE1!',
+    exchange: 'EUREX',
+    nameEs: 'Futuro Euro Stoxx 50 (FESX)',
+    nameEn: 'Euro Stoxx 50 Futures (FESX)',
+    stdPointValue: 10,
+    microPointValue: 1,
+  },
+  FRA40: {
+    futuresTicker: 'FCE1!',
+    microTicker: 'FCE1!',
+    exchange: 'EURONEXT',
+    nameEs: 'Futuro CAC 40 (FCE)',
+    nameEn: 'CAC 40 Futures (FCE)',
+    stdPointValue: 10,
+    microPointValue: 10,
+  },
+  JP225: {
+    futuresTicker: 'NK2251!',
+    microTicker: 'NK225M1!',
+    exchange: 'OSE',
+    nameEs: 'Futuro Nikkei 225 (NK225)',
+    nameEn: 'Nikkei 225 Futures (NK225)',
+    stdPointValue: 1000,
+    microPointValue: 100,
+  },
+  HK50: {
+    futuresTicker: 'HSI1!',
+    microTicker: 'MHI1!',
+    exchange: 'HKEX',
+    nameEs: 'Futuro Hang Seng (HSI / MHI)',
+    nameEn: 'Hang Seng Futures (HSI / MHI)',
+    stdPointValue: 50,
+    microPointValue: 10,
+  },
+  XAUUSD: {
+    futuresTicker: 'GC1!',
+    microTicker: 'MGC1!',
+    exchange: 'COMEX',
+    nameEs: 'Futuro Oro COMEX (GC / MGC)',
+    nameEn: 'COMEX Gold Futures (GC / MGC)',
+    stdPointValue: 100,
+    microPointValue: 10,
+  },
+  EURUSD: {
+    futuresTicker: '6E1!',
+    microTicker: 'M6E1!',
+    exchange: 'CME',
+    nameEs: 'Futuro Euro FX (6E / M6E)',
+    nameEn: 'Euro FX Futures (6E / M6E)',
+    stdPointValue: 125000,
+    microPointValue: 12500,
+  },
+};
+
+export function getEnabledTradeableInstruments(
+  enabledSymbols?: string[],
+  marketMode: 'all_programmed' | 'cfd_only' | 'futures_only' = 'all_programmed'
+): InstrumentSpec[] {
+  const baseList =
+    Array.isArray(enabledSymbols) && enabledSymbols.length > 0
+      ? TRADEABLE_INSTRUMENTS.filter((inst) => enabledSymbols.includes(inst.symbol))
+      : TRADEABLE_INSTRUMENTS;
+
+  // Never return an empty list; fallback to NAS100 if user unchecked everything
+  const safeList = baseList.length > 0 ? baseList : [TRADEABLE_INSTRUMENTS[0]];
+
+  if (marketMode === 'futures_only') {
+    return safeList.map((inst) => {
+      const fut = FUTURES_CONTRACT_MAP[inst.symbol];
+      if (!fut) return inst;
+      return {
+        ...inst,
+        nameEs: fut.nameEs,
+        nameEn: fut.nameEn,
+      };
+    });
+  }
+
+  if (marketMode === 'cfd_only') {
+    return safeList.map((inst) => ({
+      ...inst,
+      nameEs: `${inst.nameEs} (CFD)`,
+      nameEn: `${inst.nameEn} (CFD)`,
+    }));
+  }
+
+  return safeList;
+}
+

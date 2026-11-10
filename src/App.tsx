@@ -291,6 +291,8 @@ export default function App() {
             defaultBalance={settings.defaultBalance}
             defaultRisk={settings.defaultRisk}
             language={settings.language}
+            marketMode={settings.instrumentMarketMode}
+            enabledSymbols={settings.enabledSymbols}
             onSelectAssetInChart={(symbol) => {
               setTargetAssetForAction(symbol);
               setActiveTab('terminal');
@@ -312,6 +314,8 @@ export default function App() {
             defaultBalance={settings.defaultBalance}
             defaultRisk={settings.defaultRisk}
             language={settings.language}
+            marketMode={settings.instrumentMarketMode}
+            enabledSymbols={settings.enabledSymbols}
           />
         )}
 
@@ -331,6 +335,8 @@ export default function App() {
             useOnlineOnly={useOnlineOnly}
             onOpenKnowledgeTab={() => setActiveTab('knowledge')}
             language={settings.language}
+            marketMode={settings.instrumentMarketMode}
+            enabledSymbols={settings.enabledSymbols}
           />
         )}
 
@@ -352,6 +358,8 @@ export default function App() {
             session={session}
             initialAsset={targetAssetForAction}
             customDocContent={combinedActiveContent}
+            marketMode={settings.instrumentMarketMode}
+            enabledSymbols={settings.enabledSymbols}
           />
         )}
 
@@ -361,6 +369,8 @@ export default function App() {
             defaultBalance={settings.defaultBalance}
             defaultRisk={settings.defaultRisk}
             fxRates={fxRates}
+            marketMode={settings.instrumentMarketMode}
+            enabledSymbols={settings.enabledSymbols}
           />
         )}
       </main>

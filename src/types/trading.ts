@@ -175,6 +175,35 @@ export interface OpenPosition {
 
 export type AppTheme = 'crimson' | 'mint' | 'coffee' | 'midnight' | 'emerald' | 'obsidian';
 export type AppLanguage = 'es' | 'en';
+export type InstrumentMarketMode = 'all_programmed' | 'cfd_only' | 'futures_only';
+
+export const ALL_PROGRAMMED_TRADEABLE_SYMBOLS: string[] = [
+  'NAS100',
+  'US500',
+  'US30',
+  'US2000',
+  'GER40',
+  'UK100',
+  'EU50',
+  'FRA40',
+  'JP225',
+  'HK50',
+  'XAUUSD',
+  'EURUSD',
+];
+
+export const ONLY_INDEX_SYMBOLS: string[] = [
+  'NAS100',
+  'US500',
+  'US30',
+  'US2000',
+  'GER40',
+  'UK100',
+  'EU50',
+  'FRA40',
+  'JP225',
+  'HK50',
+];
 
 export interface AppSettings {
   theme: AppTheme;
@@ -185,6 +214,9 @@ export interface AppSettings {
   autoTick: boolean;
   defaultBalance: number;
   defaultRisk: number;
+  // Market Instrument Mode & Custom Asset Selection
+  instrumentMarketMode: InstrumentMarketMode;
+  enabledSymbols: string[];
   // Section visibility toggles
   showTopStatusBar: boolean;
   showSessionBanner: boolean;
@@ -210,6 +242,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   autoTick: true,
   defaultBalance: 10000,
   defaultRisk: 0.50,
+  instrumentMarketMode: 'all_programmed',
+  enabledSymbols: ALL_PROGRAMMED_TRADEABLE_SYMBOLS,
   showTopStatusBar: true,
   showSessionBanner: true,
   showTickerGrid: true,

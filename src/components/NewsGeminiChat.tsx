@@ -9,8 +9,8 @@ import {
   Globe,
   MessageSquare,
 } from 'lucide-react';
-import { AppLanguage, ExternalSourceAttribution, KillzoneSession } from '../types/trading';
-import { TRADEABLE_INSTRUMENTS } from '../lib/instruments';
+import { AppLanguage, ExternalSourceAttribution, KillzoneSession, InstrumentMarketMode } from '../types/trading';
+import { getEnabledTradeableInstruments, FUTURES_CONTRACT_MAP } from '../lib/instruments';
 
 interface ChatMessage {
   id: string;
@@ -26,6 +26,8 @@ interface NewsGeminiChatProps {
   session: KillzoneSession | null;
   initialAsset?: string;
   customDocContent?: string;
+  marketMode?: InstrumentMarketMode;
+  enabledSymbols?: string[];
 }
 
 export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
@@ -33,8 +35,11 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
   session,
   initialAsset = 'NAS100',
   customDocContent,
+  marketMode = 'all_programmed',
+  enabledSymbols,
 }) => {
   const isEn = language === 'en';
+  const visibleInstruments = getEnabledTradeableInstruments(enabledSymbols, marketMode);
   const [selectedAsset, setSelectedAsset] = useState<string>(initialAsset || 'NAS100');
   const [input, setInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -217,20 +222,25 @@ export const NewsGeminiChat: React.FC<NewsGeminiChatProps> = ({
             <span className="text-[11px] font-mono text-amber-200/70 shrink-0">
               {isEn ? 'Ref:' : 'Ref:'}
             </span>
-            {TRADEABLE_INSTRUMENTS.map((inst) => (
-              <button
-                key={inst.symbol}
-                type="button"
-                onClick={() => setSelectedAsset(inst.symbol)}
-                className={`px-2 py-1 rounded-lg text-[11px] font-mono font-bold border transition shrink-0 ${
-                  selectedAsset === inst.symbol
-                    ? 'bg-amber-600 text-white border-amber-400'
-                    : 'bg-[#120c08] text-amber-200/70 border-[#3b271a] hover:border-amber-600'
-                }`}
-              >
-                {inst.symbol}
-              </button>
-            ))}
+            {visibleInstruments.map((inst) => {
+              const fut = FUTURES_CONTRACT_MAP[inst.symbol];
+              return (
+                <button
+                  key={inst.symbol}
+                  type="button"
+                  onClick={() => setSelectedAsset(inst.symbol)}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-mono font-bold border transition shrink-0 ${
+                    selectedAsset === inst.symbol
+                      ? 'bg-amber-600 text-white border-amber-400'
+                      : 'bg-[#120c08] text-amber-200/70 border-[#3b271a] hover:border-amber-600'
+                  }`}
+                >
+                  {marketMode === 'futures_only' && fut
+                    ? `${inst.symbol} (${fut.futuresTicker})`
+                    : inst.symbol}
+                </button>
+              );
+            })}
 
             <button
               type="button"

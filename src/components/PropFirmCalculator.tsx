@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Calculator, ShieldAlert, CheckCircle2, AlertTriangle, DollarSign } from 'lucide-react';
-import { AppLanguage } from '../types/trading';
+import { AppLanguage, InstrumentMarketMode } from '../types/trading';
 import {
   TRADEABLE_INSTRUMENTS,
   getSpec,
   valuePerPointUsd,
   DEFAULT_FX_RATES,
   FxRates,
+  FUTURES_CONTRACT_MAP,
+  getEnabledTradeableInstruments,
 } from '../lib/instruments';
 
 interface PropFirmCalculatorProps {
@@ -14,6 +16,8 @@ interface PropFirmCalculatorProps {
   defaultBalance?: number;
   defaultRisk?: number;
   fxRates?: FxRates;
+  marketMode?: InstrumentMarketMode;
+  enabledSymbols?: string[];
 }
 
 export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
@@ -21,15 +25,25 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
   defaultBalance = 10000,
   defaultRisk = 0.50,
   fxRates = DEFAULT_FX_RATES,
+  marketMode = 'all_programmed',
+  enabledSymbols,
 }) => {
   const isEn = language === 'en';
+  const visibleInstruments = getEnabledTradeableInstruments(enabledSymbols, marketMode);
   const [balance, setBalance] = useState<number>(defaultBalance || 10000);
   const [riskPercent, setRiskPercent] = useState<number>(defaultRisk || 0.50);
   const [selectedAsset, setSelectedAsset] = useState<string>('NAS100');
   const [stopDistance, setStopDistance] = useState<number>(40);
   const [brokerMultiplier, setBrokerMultiplier] = useState<number>(1); // 1x or 10x for CFDs
+  const [futuresContractType, setFuturesContractType] = useState<'micro' | 'standard'>('micro');
   const [rewardRatio1, setRewardRatio1] = useState<number>(1.8);
   const [rewardRatio2, setRewardRatio2] = useState<number>(3.0);
+
+  useEffect(() => {
+    if (!visibleInstruments.some((i) => i.symbol === selectedAsset) && visibleInstruments.length > 0) {
+      setSelectedAsset(visibleInstruments[0].symbol);
+    }
+  }, [enabledSymbols, selectedAsset, visibleInstruments]);
 
   useEffect(() => {
     setBalance(defaultBalance || 10000);
@@ -54,7 +68,9 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
     EURUSD: 12,
   };
 
-  const spec = getSpec(selectedAsset) || TRADEABLE_INSTRUMENTS[0];
+  const spec = getSpec(selectedAsset) || visibleInstruments[0] || TRADEABLE_INSTRUMENTS[0];
+  const futuresSpec = FUTURES_CONTRACT_MAP[spec.symbol];
+  const isFuturesMode = marketMode === 'futures_only';
 
   // Quantitative Calculations
   const safeBalance = Math.max(0, Number(balance) || 0);
@@ -65,12 +81,34 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
   const maxDailyLoss = safeBalance * 0.05; // 5% standard Prop firm daily limit
   const hardCircuitBreaker = safeBalance * 0.015; // 1.5% rule
 
-  // Exact USD value per 1 unit of stopDistance for 1.00 Lot
+  // Exact USD value per 1 unit of stopDistance for 1.00 Lot / Contract
   let usdRiskPerUnitPerLot = 1;
   let unitLabel = isEn ? spec.unitEn : spec.unitEs;
   let contractExplanation = '';
 
-  if (spec.symbol === 'EURUSD') {
+  if (isFuturesMode && futuresSpec) {
+    const useMicro = futuresContractType === 'micro' && futuresSpec.microTicker;
+    const activeTicker = useMicro ? futuresSpec.microTicker! : futuresSpec.futuresTicker;
+    const rawPtVal = useMicro && futuresSpec.microPointValue ? futuresSpec.microPointValue : futuresSpec.stdPointValue;
+    const ccyRate =
+      spec.quoteCcy === 'USD' ? 1 : fxRates[spec.quoteCcy as keyof FxRates] || 1;
+    // For EURUSD futures (6E/M6E), stdPointValue is 125000 EUR ($12.50 per pip) or 12500 EUR ($1.25 per pip)
+    usdRiskPerUnitPerLot =
+      spec.symbol === 'EURUSD' ? (rawPtVal * 0.0001) : rawPtVal * ccyRate;
+    unitLabel =
+      spec.symbol === 'EURUSD'
+        ? 'pips'
+        : spec.symbol === 'XAUUSD'
+        ? isEn
+          ? 'dollars ($)'
+          : 'dólares ($)'
+        : isEn
+        ? 'points'
+        : 'puntos';
+    contractExplanation = isEn
+      ? `1 Contract (${activeTicker} • ${futuresSpec.exchange}) = $${usdRiskPerUnitPerLot.toFixed(2)} USD per ${unitLabel}`
+      : `1 Contrato (${activeTicker} • ${futuresSpec.exchange}) = $${usdRiskPerUnitPerLot.toFixed(2)} USD por ${unitLabel}`;
+  } else if (spec.symbol === 'EURUSD') {
     // stopDistance is entered in pips (1 pip = 0.0001 -> $10/pip per standard lot)
     usdRiskPerUnitPerLot = 10;
     unitLabel = 'pips';
@@ -101,7 +139,9 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
 
   const lossPerOneFullLot = safeStop * usdRiskPerUnitPerLot;
   const rawLots = lossPerOneFullLot > 0 ? targetMonetaryRisk / lossPerOneFullLot : 0.01;
-  const finalLots = Math.max(0.01, parseFloat(rawLots.toFixed(2)));
+  const finalLots = isFuturesMode
+    ? Math.max(1, Math.floor(rawLots))
+    : Math.max(0.01, parseFloat(rawLots.toFixed(2)));
 
   // Exact monetary loss with finalLots (solves the bug where 0.01 lot clamp caused actual loss != displayed risk)
   const actualMonetaryLossAtStop = finalLots * lossPerOneFullLot;
@@ -125,9 +165,13 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
                 : 'Calculadora Cuantitativa de Riesgo, Lotaje y Pérdida/Ganancia Exacta'}
             </h2>
             <p className="text-xs text-amber-200/70">
-              {isEn
-                ? 'Calculates exact lot sizes and verifies the real dollar loss at Stop Loss and profit at Take Profit across all 12 primary CFD indices, Gold, and Forex.'
-                : 'Calcula el lotaje exacto y verifica cuánto pierdes realmente al tocar el Stop Loss y cuánto ganas en TP1/TP2 en los 12 índices CFD, Oro y Forex.'}
+              {isFuturesMode
+                ? isEn
+                  ? 'Futures Mode active: Calculates exact Micro/Standard Futures contracts and real P&L.'
+                  : 'Modo Solo Futuros activo: Calcula contratos Micro/Estándar de Futuros y pérdida/ganancia exacta.'
+                : isEn
+                ? 'Calculates exact lot sizes and verifies the real dollar loss at Stop Loss and profit at Take Profit across your active instruments.'
+                : 'Calcula el lotaje exacto y verifica cuánto pierdes realmente al tocar el Stop Loss y cuánto ganas en TP1/TP2 en tus activos habilitados.'}
             </p>
           </div>
         </div>
@@ -198,7 +242,13 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
 
           <div>
             <label className="block text-xs font-mono font-semibold text-amber-200/80 mb-1.5 uppercase">
-              {isEn ? '3. CFD Index / Asset' : '3. Índice CFD / Activo'}
+              {isFuturesMode
+                ? isEn
+                  ? '3. Futures Contract'
+                  : '3. Contrato de Futuros'
+                : isEn
+                ? '3. CFD Index / Asset'
+                : '3. Índice CFD / Activo'}
             </label>
             <select
               value={selectedAsset}
@@ -210,11 +260,16 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
               }}
               className="w-full bg-[#120c08] border border-[#3b271a] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-amber-500 font-bold"
             >
-              {TRADEABLE_INSTRUMENTS.map((item) => (
-                <option key={item.symbol} value={item.symbol}>
-                  {item.symbol} — {isEn ? item.nameEn : item.nameEs}
-                </option>
-              ))}
+              {visibleInstruments.map((item) => {
+                const fut = FUTURES_CONTRACT_MAP[item.symbol];
+                return (
+                  <option key={item.symbol} value={item.symbol}>
+                    {isFuturesMode && fut
+                      ? `${item.symbol} (${fut.futuresTicker}) — ${isEn ? fut.nameEn : fut.nameEs}`
+                      : `${item.symbol} — ${isEn ? item.nameEn : item.nameEs}`}
+                  </option>
+                );
+              })}
             </select>
             <span className="text-[10px] text-amber-300/70 mt-1.5 block font-mono">
               {contractExplanation}
@@ -234,14 +289,52 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
             />
             <span className="text-[10px] text-amber-200/60 mt-1.5 block font-mono">
               {isEn
-                ? `1.00 Lot risks $${lossPerOneFullLot.toFixed(2)} USD for ${safeStop} ${unitLabel}`
-                : `1.00 Lote arriesga $${lossPerOneFullLot.toFixed(2)} USD en ${safeStop} ${unitLabel}`}
+                ? `1 ${isFuturesMode ? 'Contract' : 'Lot'} risks $${lossPerOneFullLot.toFixed(2)} USD for ${safeStop} ${unitLabel}`
+                : `1 ${isFuturesMode ? 'Contrato' : 'Lote'} arriesga $${lossPerOneFullLot.toFixed(2)} USD en ${safeStop} ${unitLabel}`}
             </span>
           </div>
         </div>
 
-        {/* Index broker contract size toggle */}
-        {spec.kind === 'index' && (
+        {/* Futures Micro vs Standard toggle OR CFD Index broker contract size toggle */}
+        {isFuturesMode && futuresSpec ? (
+          <div className="mt-4 p-3 rounded-xl bg-[#120c08] border border-[#3b271a] flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-amber-200">
+            <span>
+              {isEn
+                ? `Futures Contract Specification (${futuresSpec.exchange}):`
+                : `Especificación Contrato de Futuros (${futuresSpec.exchange}):`}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {futuresSpec.microTicker && (
+                <button
+                  type="button"
+                  onClick={() => setFuturesContractType('micro')}
+                  className={`px-3 py-1 rounded-lg border transition ${
+                    futuresContractType === 'micro'
+                      ? 'bg-amber-600 text-white border-amber-400 font-bold'
+                      : 'bg-[#18110b] text-amber-200/70 border-[#3b271a]'
+                  }`}
+                >
+                  {isEn
+                    ? `Micro (${futuresSpec.microTicker} • ${futuresSpec.microPointValue} ${spec.quoteCcy}/pt)`
+                    : `Micro (${futuresSpec.microTicker} • ${futuresSpec.microPointValue} ${spec.quoteCcy}/pto)`}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setFuturesContractType('standard')}
+                className={`px-3 py-1 rounded-lg border transition ${
+                  futuresContractType === 'standard' || !futuresSpec.microTicker
+                    ? 'bg-amber-600 text-white border-amber-400 font-bold'
+                    : 'bg-[#18110b] text-amber-200/70 border-[#3b271a]'
+                }`}
+              >
+                {isEn
+                  ? `Standard (${futuresSpec.futuresTicker} • ${futuresSpec.stdPointValue} ${spec.quoteCcy}/pt)`
+                  : `Estándar (${futuresSpec.futuresTicker} • ${futuresSpec.stdPointValue} ${spec.quoteCcy}/pto)`}
+              </button>
+            </div>
+          </div>
+        ) : spec.kind === 'index' ? (
           <div className="mt-4 p-3 rounded-xl bg-[#120c08] border border-[#3b271a] flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-amber-200">
             <span>
               {isEn
@@ -277,7 +370,7 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
               </button>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Warning if 0.01 minimum lot exceeds target risk */}

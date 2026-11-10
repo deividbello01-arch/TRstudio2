@@ -19,8 +19,8 @@ import {
   Plus,
   Target,
 } from 'lucide-react';
-import { TradeSetup, KillzoneSession, CustomDocument, AppLanguage } from '../types/trading';
-import { TRADEABLE_INSTRUMENTS } from '../lib/instruments';
+import { TradeSetup, KillzoneSession, CustomDocument, AppLanguage, InstrumentMarketMode } from '../types/trading';
+import { getEnabledTradeableInstruments, FUTURES_CONTRACT_MAP } from '../lib/instruments';
 
 interface TradeSetupEngineProps {
   initialAsset?: string;
@@ -31,6 +31,8 @@ interface TradeSetupEngineProps {
   defaultBalance?: number;
   defaultRisk?: number;
   language?: AppLanguage;
+  marketMode?: InstrumentMarketMode;
+  enabledSymbols?: string[];
 }
 
 export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
@@ -40,8 +42,11 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
   defaultBalance = 6000,
   defaultRisk = 0.50,
   language = 'es',
+  marketMode = 'all_programmed',
+  enabledSymbols,
 }) => {
   const isEn = language === 'en';
+  const visibleInstruments = getEnabledTradeableInstruments(enabledSymbols, marketMode);
   const [selectedAsset, setSelectedAsset] = useState<string>(initialAsset);
   const [accountBalance, setAccountBalance] = useState<number>(defaultBalance);
   const [riskPercentage, setRiskPercentage] = useState<number>(defaultRisk);
@@ -71,13 +76,27 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
     documents.find((d) => d.id === selectedDocId) || customDocs[0] || documents[0];
 
   React.useEffect(() => {
-    if (initialAsset) setSelectedAsset(initialAsset);
-  }, [initialAsset]);
+    if (initialAsset && visibleInstruments.some((i) => i.symbol === initialAsset)) {
+      setSelectedAsset(initialAsset);
+    } else if (
+      !visibleInstruments.some((i) => i.symbol === selectedAsset) &&
+      visibleInstruments.length > 0
+    ) {
+      setSelectedAsset(visibleInstruments[0].symbol);
+    }
+  }, [initialAsset, enabledSymbols, selectedAsset, visibleInstruments]);
 
-  const assets = TRADEABLE_INSTRUMENTS.map((inst) => ({
-    symbol: inst.symbol,
-    name: isEn ? inst.nameEn : inst.nameEs,
-  }));
+  const assets = visibleInstruments.map((inst) => {
+    const fut = FUTURES_CONTRACT_MAP[inst.symbol];
+    const baseName = isEn ? inst.nameEn : inst.nameEs;
+    return {
+      symbol: inst.symbol,
+      name:
+        marketMode === 'futures_only' && fut
+          ? `${fut.futuresTicker} • ${isEn ? fut.nameEn : fut.nameEs}`
+          : baseName,
+    };
+  });
 
   const handleRequestTradeSetup = async () => {
     setIsLoading(true);

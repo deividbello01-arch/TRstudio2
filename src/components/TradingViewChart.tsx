@@ -15,13 +15,15 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { CandleCountdownTimer } from './CandleCountdownTimer';
-import { AppLanguage } from '../types/trading';
-import { INSTRUMENTS } from '../lib/instruments';
+import { AppLanguage, InstrumentMarketMode, ALL_PROGRAMMED_TRADEABLE_SYMBOLS } from '../types/trading';
+import { INSTRUMENTS, FUTURES_CONTRACT_MAP } from '../lib/instruments';
 
 interface TradingViewChartProps {
   currentSymbol: string;
   onSymbolChange?: (symbol: string) => void;
   language?: AppLanguage;
+  marketMode?: InstrumentMarketMode;
+  enabledSymbols?: string[];
 }
 
 type DrawingTool = 'cursor' | 'long' | 'short' | 'zone' | 'hline' | 'line' | 'pen' | 'text';
@@ -45,6 +47,8 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
   currentSymbol,
   onSymbolChange,
   language = 'es',
+  marketMode = 'all_programmed',
+  enabledSymbols,
 }) => {
   const isEn = language === 'en';
   const [timeframe, setTimeframe] = useState<string>('15');
@@ -78,6 +82,12 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
     }
   }, [drawings]);
 
+  const activeEnabledSet = new Set(
+    Array.isArray(enabledSymbols) && enabledSymbols.length > 0
+      ? enabledSymbols
+      : ALL_PROGRAMMED_TRADEABLE_SYMBOLS
+  );
+
   // Build unrestricted embed symbols for all 15 CFD indices, metals, forex & macro variables
   const symbolMap: Record<
     string,
@@ -88,15 +98,30 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
       category: string;
     }
   > = Object.fromEntries(
-    INSTRUMENTS.map((spec) => [
-      spec.symbol,
-      {
-        primary: spec.chart.primary,
-        alternates: spec.chart.alternates,
-        name: isEn ? spec.nameEn : spec.nameEs,
-        category: spec.kind.toUpperCase(),
-      },
-    ])
+    INSTRUMENTS.map((spec) => {
+      const fut = FUTURES_CONTRACT_MAP[spec.symbol];
+      const displayName =
+        marketMode === 'futures_only' && fut
+          ? isEn
+            ? fut.nameEn
+            : fut.nameEs
+          : isEn
+          ? spec.nameEn
+          : spec.nameEs;
+      return [
+        spec.symbol,
+        {
+          primary: spec.chart.primary,
+          alternates: spec.chart.alternates,
+          name: displayName,
+          category: spec.kind.toUpperCase(),
+        },
+      ];
+    })
+  );
+
+  const visibleSymbolKeys = Object.keys(symbolMap).filter(
+    (sym) => activeEnabledSet.has(sym) || ['DXY', 'US10Y', 'VIX'].includes(sym)
   );
 
   const selectedConfig = symbolMap[currentSymbol] || symbolMap.NAS100;
@@ -387,8 +412,13 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
           <span className="text-[11px] text-amber-500/60 uppercase mr-1 shrink-0">
             {isEn ? 'Assets:' : 'Activos:'}
           </span>
-          {Object.keys(symbolMap).map((sym) => {
+          {visibleSymbolKeys.map((sym) => {
             const isSelected = currentSymbol === sym;
+            const fut = FUTURES_CONTRACT_MAP[sym];
+            const pillLabel =
+              marketMode === 'futures_only' && fut
+                ? `${sym} (${fut.futuresTicker})`
+                : sym;
             return (
               <button
                 key={sym}
@@ -402,7 +432,7 @@ export const TradingViewChart: React.FC<TradingViewChartProps> = ({
                     : 'bg-[#1e130c] text-amber-200/70 hover:text-amber-100 border border-[#332014] hover:border-amber-800'
                 }`}
               >
-                {sym}
+                {pillLabel}
               </button>
             );
           })}
