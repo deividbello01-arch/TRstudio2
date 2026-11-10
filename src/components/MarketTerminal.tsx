@@ -69,50 +69,77 @@ function computeLiveSessionTimers(isEn: boolean, is12h: boolean): LiveSessionTim
   let sessionName = isEn ? 'Asian Range (Asia Session)' : 'Rango Asiático (Sesión Asia)';
   let sessionHours = is12h ? '7:00 PM – 2:00 AM' : '19:00 – 02:00';
   let remainingSec = 0;
-  let nextSessionName = isEn ? 'London & Europe Open' : 'Sesión Londres & Europa';
-  let nextSessionWindow = is12h ? '2:00 AM – 8:00 AM (NY)' : '02:00 – 08:00 (NY)';
+  let nextSessionName = isEn ? 'London & Europe Open (Killzone)' : 'Sesión Londres & Apertura Europea';
+  let nextSessionWindow = is12h ? '2:00 AM – 5:00 AM (NY)' : '02:00 – 05:00 (NY)';
   let nextSessionFocus = isEn
     ? 'Asian range sweep & expansion in GER40, UK100, EU50, EUR/USD & XAU/USD'
     : 'Barrido del rango asiático y expansión en GER40, UK100, EU50, EUR/USD y XAU/USD';
 
-  if (secOfDay >= 2 * 3600 && secOfDay < 8 * 3600) {
-    sessionName = isEn ? 'London & European Session' : 'Sesión Londres & Europea';
-    sessionHours = is12h ? '2:00 AM – 8:00 AM' : '02:00 – 08:00';
+  if (secOfDay >= 2 * 3600 && secOfDay < 5 * 3600) {
+    sessionName = isEn ? 'London & European Open (Killzone)' : 'Sesión Londres & Apertura Europea (Killzone)';
+    sessionHours = is12h ? '2:00 AM – 5:00 AM' : '02:00 – 05:00';
+    remainingSec = 5 * 3600 - secOfDay;
+    nextSessionName = isEn ? 'European Continuation / Pre-NY' : 'Continuación Europea / Pre-NY';
+    nextSessionWindow = is12h ? '5:00 AM – 8:00 AM (NY)' : '05:00 – 08:00 (NY)';
+    nextSessionFocus = isEn
+      ? 'Trend continuation in European indices & FX ahead of US macro data'
+      : 'Continuación de tendencia en índices europeos y divisas antes de datos macro de EE. UU.';
+  } else if (secOfDay >= 5 * 3600 && secOfDay < 8 * 3600) {
+    sessionName = isEn ? 'European Continuation / Pre-NY' : 'Continuación Europea / Pre-NY';
+    sessionHours = is12h ? '5:00 AM – 8:00 AM' : '05:00 – 08:00';
     remainingSec = 8 * 3600 - secOfDay;
-    nextSessionName = isEn ? 'NY Pre-Market & COMEX Gold' : 'Pre-Mercado NY & Oro COMEX';
+    nextSessionName = isEn ? 'NY Pre-Market & COMEX Gold' : 'Pre-Mercado NY & Apertura COMEX';
     nextSessionWindow = is12h ? '8:00 AM – 9:30 AM (NY)' : '08:00 – 09:30 (NY)';
     nextSessionFocus = isEn
       ? 'Gold futures open (8:20 AM) and 8:30 AM macro releases'
       : 'Apertura de futuros de Oro (8:20 AM) y datos macro de las 8:30 AM';
   } else if (secOfDay >= 8 * 3600 && secOfDay < 9.5 * 3600) {
-    sessionName = isEn ? 'NY Pre-Market & COMEX Gold' : 'Pre-Mercado NY & Oro COMEX';
+    sessionName = isEn ? 'NY Pre-Market & COMEX Gold' : 'Pre-Mercado NY & Apertura COMEX';
     sessionHours = is12h ? '8:00 AM – 9:30 AM' : '08:00 – 09:30';
     remainingSec = 9.5 * 3600 - secOfDay;
-    nextSessionName = isEn ? 'New York Session (Open)' : 'Sesión Nueva York (Apertura)';
-    nextSessionWindow = is12h ? '9:30 AM – 4:00 PM (NY)' : '09:30 – 16:00 (NY)';
+    nextSessionName = isEn ? 'Wall Street Open & Silver Bullet AM' : 'Apertura Wall Street & Silver Bullet AM';
+    nextSessionWindow = is12h ? '9:30 AM – 12:00 PM (NY)' : '09:30 – 12:00 (NY)';
     nextSessionFocus = isEn
       ? 'Primary liquidity injection across NAS100, US500, US30, US2000 & XAU/USD'
       : 'Inyección de liquidez principal en NAS100, US500, US30, US2000 y XAU/USD';
-  } else if (secOfDay >= 9.5 * 3600 && secOfDay < 16 * 3600) {
-    sessionName = isEn ? 'New York Session' : 'Sesión Nueva York';
-    sessionHours = is12h ? '9:30 AM – 4:00 PM' : '09:30 – 16:00';
+  } else if (secOfDay >= 9.5 * 3600 && secOfDay < 12 * 3600) {
+    sessionName = isEn ? 'Wall Street Open & Silver Bullet AM' : 'Apertura Wall Street & Silver Bullet AM';
+    sessionHours = is12h ? '9:30 AM – 12:00 PM' : '09:30 – 12:00';
+    remainingSec = 12 * 3600 - secOfDay;
+    nextSessionName = isEn ? 'New York Lunch' : 'Almuerzo Nueva York (NY Lunch)';
+    nextSessionWindow = is12h ? '12:00 PM – 1:30 PM (NY)' : '12:00 – 13:30 (NY)';
+    nextSessionFocus = isEn
+      ? 'Intraday volume reduction on Wall Street; wait for afternoon Silver Bullet'
+      : 'Reducción de volumen intradía en Wall Street; esperar ventana de la tarde';
+  } else if (secOfDay >= 12 * 3600 && secOfDay < 13.5 * 3600) {
+    sessionName = isEn ? 'New York Lunch (Consolidation)' : 'Almuerzo Nueva York (NY Lunch)';
+    sessionHours = is12h ? '12:00 PM – 1:30 PM' : '12:00 – 13:30';
+    remainingSec = 13.5 * 3600 - secOfDay;
+    nextSessionName = isEn ? 'NY Afternoon & Silver Bullet PM' : 'Sesión NY Tarde & Silver Bullet PM';
+    nextSessionWindow = is12h ? '1:30 PM – 4:00 PM (NY)' : '13:30 – 16:00 (NY)';
+    nextSessionFocus = isEn
+      ? 'Afternoon institutional orderflow & PM Silver Bullet (2:00 – 3:00 PM NY)'
+      : 'Flujo institucional vespertino y ventana Silver Bullet PM (2:00 – 3:00 PM NY)';
+  } else if (secOfDay >= 13.5 * 3600 && secOfDay < 16 * 3600) {
+    sessionName = isEn ? 'NY Afternoon & Silver Bullet PM' : 'Sesión NY Tarde & Silver Bullet PM';
+    sessionHours = is12h ? '1:30 PM – 4:00 PM' : '13:30 – 16:00';
     remainingSec = 16 * 3600 - secOfDay;
-    nextSessionName = isEn ? 'Post-Market & Rollover' : 'Post-Mercado & Rollover';
+    nextSessionName = isEn ? 'Post-Market & Rollover' : 'Post-Mercado & Rollover Bancario';
     nextSessionWindow = is12h ? '4:00 PM – 7:00 PM (NY)' : '16:00 – 19:00 (NY)';
     nextSessionFocus = isEn
       ? 'US session close, lower liquidity & spread adjustment'
       : 'Cierre de sesión americana, baja liquidez y ajuste de spreads';
   } else if (secOfDay >= 16 * 3600 && secOfDay < 19 * 3600) {
-    sessionName = isEn ? 'Post-Market & Rollover' : 'Post-Mercado & Rollover';
+    sessionName = isEn ? 'Post-Market & Rollover' : 'Post-Mercado & Rollover Bancario';
     sessionHours = is12h ? '4:00 PM – 7:00 PM' : '16:00 – 19:00';
     remainingSec = 19 * 3600 - secOfDay;
-    nextSessionName = isEn ? 'Asian Session (JP225 & HK50)' : 'Sesión Asia (JP225 & HK50)';
+    nextSessionName = isEn ? 'Asian Session (JP225 & HK50)' : 'Rango Asiático (Sesión Asia)';
     nextSessionWindow = is12h ? '7:00 PM – 2:00 AM (NY)' : '19:00 – 02:00 (NY)';
     nextSessionFocus = isEn
       ? 'Tokyo/HK index liquidity & Asian high/low range formation'
       : 'Liquidez en Nikkei 225 / Hang Seng y marcación de altos/bajos asiáticos';
   } else {
-    sessionName = isEn ? 'Asian Session (JP225 & HK50)' : 'Sesión Asia (JP225 & HK50)';
+    sessionName = isEn ? 'Asian Range (Asia Session)' : 'Rango Asiático (Sesión Asia)';
     sessionHours = is12h ? '7:00 PM – 2:00 AM' : '19:00 – 02:00';
     remainingSec = secOfDay >= 19 * 3600 ? 24 * 3600 - secOfDay + 2 * 3600 : 2 * 3600 - secOfDay;
   }

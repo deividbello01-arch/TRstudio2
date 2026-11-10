@@ -17,7 +17,7 @@ import {
   DEFAULT_APP_SETTINGS,
 } from './types/trading';
 import { DEFAULT_KNOWLEDGE_DOCUMENTS, StrategyPlaybook } from './lib/strategiesData';
-import { getSpec } from './lib/instruments';
+import { getSpec, FxRates, DEFAULT_FX_RATES } from './lib/instruments';
 import { Activity } from 'lucide-react';
 
 export default function App() {
@@ -25,6 +25,7 @@ export default function App() {
   const [targetAssetForAction, setTargetAssetForAction] = useState<string>('NAS100');
   const [instruments, setInstruments] = useState<InstrumentQuote[]>([]);
   const [session, setSession] = useState<KillzoneSession | null>(null);
+  const [fxRates, setFxRates] = useState<FxRates>(DEFAULT_FX_RATES);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -180,6 +181,9 @@ export default function App() {
           });
         });
         setSession(data.session || null);
+        if (data.fxRates) {
+          setFxRates((prev) => ({ ...prev, ...data.fxRates }));
+        }
       }
     } catch (err) {
       console.error('Error fetching market feed:', err);
@@ -356,6 +360,7 @@ export default function App() {
             language={settings.language}
             defaultBalance={settings.defaultBalance}
             defaultRisk={settings.defaultRisk}
+            fxRates={fxRates}
           />
         )}
       </main>

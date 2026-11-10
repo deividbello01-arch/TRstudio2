@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calculator, ShieldAlert, CheckCircle2, AlertTriangle, DollarSign } from 'lucide-react';
 import { AppLanguage } from '../types/trading';
 import {
@@ -6,18 +6,21 @@ import {
   getSpec,
   valuePerPointUsd,
   DEFAULT_FX_RATES,
+  FxRates,
 } from '../lib/instruments';
 
 interface PropFirmCalculatorProps {
   language?: AppLanguage;
   defaultBalance?: number;
   defaultRisk?: number;
+  fxRates?: FxRates;
 }
 
 export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
   language = 'es',
   defaultBalance = 10000,
   defaultRisk = 0.50,
+  fxRates = DEFAULT_FX_RATES,
 }) => {
   const isEn = language === 'en';
   const [balance, setBalance] = useState<number>(defaultBalance || 10000);
@@ -27,6 +30,14 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
   const [brokerMultiplier, setBrokerMultiplier] = useState<number>(1); // 1x or 10x for CFDs
   const [rewardRatio1, setRewardRatio1] = useState<number>(1.8);
   const [rewardRatio2, setRewardRatio2] = useState<number>(3.0);
+
+  useEffect(() => {
+    setBalance(defaultBalance || 10000);
+  }, [defaultBalance]);
+
+  useEffect(() => {
+    setRiskPercent(defaultRisk || 0.50);
+  }, [defaultRisk]);
 
   const defaultStopMap: Record<string, number> = {
     NAS100: 42,
@@ -75,7 +86,7 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
       : '1 Lote Estándar (100 oz) = $100.00 USD por cada $1.00 de movimiento ($10/pip)';
   } else {
     // CFD Index: stopDistance is entered in index points
-    const baseUsdPerPt = valuePerPointUsd(spec, DEFAULT_FX_RATES);
+    const baseUsdPerPt = valuePerPointUsd(spec, fxRates);
     usdRiskPerUnitPerLot = baseUsdPerPt * brokerMultiplier;
     unitLabel = isEn ? 'points' : 'puntos';
     contractExplanation =

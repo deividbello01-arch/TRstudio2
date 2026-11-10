@@ -78,17 +78,32 @@ export const Navbar: React.FC<NavbarProps> = ({
         : `Sesión Londres (${is12h ? '2:00 AM' : '02:00'})`;
       let remainingSec = 0;
 
-      if (secOfDay >= 2 * 3600 && secOfDay < 8 * 3600) {
+      if (secOfDay >= 2 * 3600 && secOfDay < 5 * 3600) {
+        nextName = isEn
+          ? `Pre-NY (${is12h ? '5:00 AM' : '05:00'})`
+          : `Continuación Europea (${is12h ? '5:00 AM' : '05:00'})`;
+        remainingSec = 5 * 3600 - secOfDay;
+      } else if (secOfDay >= 5 * 3600 && secOfDay < 8 * 3600) {
         nextName = isEn
           ? `NY Pre-Market (${is12h ? '8:00 AM' : '08:00'})`
           : `Pre-Mercado NY (${is12h ? '8:00 AM' : '08:00'})`;
         remainingSec = 8 * 3600 - secOfDay;
       } else if (secOfDay >= 8 * 3600 && secOfDay < 9.5 * 3600) {
         nextName = isEn
-          ? `New York (${is12h ? '9:30 AM' : '09:30'})`
-          : `Sesión Nueva York (${is12h ? '9:30 AM' : '09:30'})`;
+          ? `Wall St Open (${is12h ? '9:30 AM' : '09:30'})`
+          : `Apertura NY (${is12h ? '9:30 AM' : '09:30'})`;
         remainingSec = 9.5 * 3600 - secOfDay;
-      } else if (secOfDay >= 9.5 * 3600 && secOfDay < 16 * 3600) {
+      } else if (secOfDay >= 9.5 * 3600 && secOfDay < 12 * 3600) {
+        nextName = isEn
+          ? `NY Lunch (${is12h ? '12:00 PM' : '12:00'})`
+          : `Almuerzo NY (${is12h ? '12:00 PM' : '12:00'})`;
+        remainingSec = 12 * 3600 - secOfDay;
+      } else if (secOfDay >= 12 * 3600 && secOfDay < 13.5 * 3600) {
+        nextName = isEn
+          ? `NY Afternoon (${is12h ? '1:30 PM' : '13:30'})`
+          : `Sesión NY Tarde (${is12h ? '1:30 PM' : '13:30'})`;
+        remainingSec = 13.5 * 3600 - secOfDay;
+      } else if (secOfDay >= 13.5 * 3600 && secOfDay < 16 * 3600) {
         nextName = isEn
           ? `Post-Market (${is12h ? '4:00 PM' : '16:00'})`
           : `Post-Mercado NY (${is12h ? '4:00 PM' : '16:00'})`;
