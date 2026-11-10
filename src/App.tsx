@@ -1,0 +1,388 @@
+import React, { useState, useEffect } from 'react';
+import { Navbar } from './components/Navbar';
+import { MarketTerminal } from './components/MarketTerminal';
+import { TradeSetupEngine } from './components/TradeSetupEngine';
+import { ReportGenerator } from './components/ReportGenerator';
+import { DocumentManager } from './components/DocumentManager';
+import { PropFirmCalculator } from './components/PropFirmCalculator';
+import { SettingsModal } from './components/SettingsModal';
+import { NewsGeminiChat } from './components/NewsGeminiChat';
+import {
+  InstrumentQuote,
+  KillzoneSession,
+  CustomDocument,
+  AppSettings,
+  DEFAULT_APP_SETTINGS,
+} from './types/trading';
+import { Activity, Newspaper, Sparkles } from 'lucide-react';
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState<string>('terminal');
+  const [targetAssetForAction, setTargetAssetForAction] = useState<string>('NAS100');
+  const [instruments, setInstruments] = useState<InstrumentQuote[]>([]);
+  const [session, setSession] = useState<KillzoneSession | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    try {
+      const saved = localStorage.getItem('trstudio_settings_v3');
+      if (saved) {
+        return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(saved) };
+      }
+    } catch (e) {
+      console.warn('Could not load saved settings:', e);
+    }
+    return DEFAULT_APP_SETTINGS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('trstudio_settings_v3', JSON.stringify(settings));
+    } catch (e) {
+      console.warn('Could not persist settings:', e);
+    }
+  }, [settings]);
+
+  const handleUpdateSettings = (partial: Partial<AppSettings>) => {
+    setSettings((prev) => ({ ...prev, ...partial }));
+  };
+
+  const handleResetSettings = () => {
+    setSettings(DEFAULT_APP_SETTINGS);
+  };
+
+  // Only keep the Online Web Sources base by default; user can add custom analyses in Bases
+  const [documents, setDocuments] = useState<CustomDocument[]>(() => {
+    const defaultDocs: CustomDocument[] = [
+      {
+        id: 'doc-builtin-web-sources',
+        name: 'Fuentes Web Financieras Online (Reuters, Bloomberg, Kitco, CNBC, Investing)',
+        type: 'builtin',
+        content: `# Fuentes Web Financieras Online — TRstudio
+1. Noticias Macroeconómicas y Bancos Centrales (Fed, BCE, CPI/NFP):
+- Reuters Markets (reuters.com/markets)
+- Bloomberg Markets (bloomberg.com/markets)
+- Financial Times (ft.com)
+- ForexLive (forexlive.com)
+- Investing.com / DailyFX (investing.com/economic-calendar/)
+
+2. Oro y Metales Preciosos (XAU/USD):
+- World Gold Council (gold.org)
+- Kitco News (kitco.com)
+
+3. Índices Bursátiles y Bonos (US30 / NAS100 / US10Y / VIX):
+- CNBC Markets (cnbc.com/world-markets)
+- Yahoo Finance (finance.yahoo.com)
+- MarketWatch (marketwatch.com)`,
+        charCount: 620,
+        description: 'Base online oficial con las mejores webs financieras para investigar mercado y extraer entradas en tiempo real.',
+        addedAt: new Date().toISOString(),
+        isActive: true,
+      },
+    ];
+
+    try {
+      const saved = localStorage.getItem('trstudio_knowledge_docs_v1');
+      if (saved) {
+        const parsed: CustomDocument[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not load saved knowledge docs:', e);
+    }
+    return defaultDocs;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('trstudio_knowledge_docs_v1', JSON.stringify(documents));
+    } catch (e) {
+      console.warn('Could not persist docs to localStorage:', e);
+    }
+  }, [documents]);
+
+  useEffect(() => {
+    const fetchWebSourcesDoc = async () => {
+      try {
+        const res = await fetch('/api/treatise');
+        if (res.ok) {
+          const data = await res.json();
+          const webSourcesText = data.webSourcesPromptContent || '';
+          if (webSourcesText) {
+            setDocuments((prev) =>
+              prev.map((d) =>
+                d.id === 'doc-builtin-web-sources'
+                  ? { ...d, content: webSourcesText, charCount: webSourcesText.length }
+                  : d
+              )
+            );
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching web sources doc:', err);
+      }
+    };
+
+    fetchWebSourcesDoc();
+    refreshFeed();
+
+    const syncInterval = setInterval(refreshFeed, 2500);
+    return () => clearInterval(syncInterval);
+  }, []);
+
+  useEffect(() => {
+    if (!settings.autoTick) return;
+
+    const tickInterval = setInterval(() => {
+      setInstruments((prev) =>
+        prev.map((inst) => {
+          const step =
+            inst.symbol === 'EURUSD'
+              ? (Math.random() - 0.495) * 0.00012
+              : inst.symbol === 'XAUUSD'
+              ? (Math.random() - 0.49) * 0.25
+              : inst.symbol === 'NAS100' || inst.symbol === 'US30'
+              ? (Math.random() - 0.49) * 1.8
+              : (Math.random() - 0.5) * 0.015;
+
+          const decimals = inst.symbol === 'EURUSD' ? 4 : inst.symbol === 'US10Y' ? 3 : 2;
+          const nextPrice = Number((inst.price + step).toFixed(decimals));
+          const direction: 'up' | 'down' | 'none' =
+            nextPrice > inst.price ? 'up' : nextPrice < inst.price ? 'down' : 'none';
+
+          return {
+            ...inst,
+            price: nextPrice,
+            lastTickDirection: direction,
+            high24h: inst.high24h ? Math.max(inst.high24h, nextPrice) : nextPrice,
+            low24h: inst.low24h ? Math.min(inst.low24h, nextPrice) : nextPrice,
+          };
+        })
+      );
+    }, 900);
+
+    return () => clearInterval(tickInterval);
+  }, [settings.autoTick]);
+
+  const refreshFeed = async () => {
+    try {
+      const res = await fetch('/api/market-feed');
+      if (res.ok) {
+        const data = await res.json();
+        setInstruments((prev) => {
+          const incoming: InstrumentQuote[] = data.instruments || [];
+          return incoming.map((inc) => {
+            const existing = prev.find((p) => p.symbol === inc.symbol);
+            const direction: 'up' | 'down' | 'none' = existing
+              ? inc.price > existing.price
+                ? 'up'
+                : inc.price < existing.price
+                ? 'down'
+                : existing.lastTickDirection || 'none'
+              : 'none';
+            return { ...inc, lastTickDirection: direction };
+          });
+        });
+        setSession(data.session || null);
+      }
+    } catch (err) {
+      console.error('Error fetching market feed:', err);
+    }
+  };
+
+  const handleToggleDocActive = (id: string) => {
+    setDocuments((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, isActive: !d.isActive } : d))
+    );
+  };
+
+  const handleActivateAllDocs = () => {
+    setDocuments((prev) => prev.map((d) => ({ ...d, isActive: true })));
+  };
+
+  const handleDeactivateAllDocs = () => {
+    setDocuments((prev) => prev.map((d) => ({ ...d, isActive: false })));
+  };
+
+  const handleAddCustomDoc = (name: string, content: string, description: string) => {
+    const newDoc: CustomDocument = {
+      id: `doc-${Date.now()}`,
+      name,
+      type: 'custom',
+      content,
+      charCount: content.length,
+      description,
+      addedAt: new Date().toISOString(),
+      isActive: true,
+    };
+
+    setDocuments((prev) => [newDoc, ...prev]);
+  };
+
+  const handleDeleteDoc = (id: string) => {
+    setDocuments((prev) => prev.filter((d) => d.id !== id || d.type === 'builtin'));
+  };
+
+  const handleQuickRequestEntry = (symbol: string) => {
+    setTargetAssetForAction(symbol);
+    setActiveTab('entries');
+  };
+
+  const handleQuickGenerateReport = (symbol: string) => {
+    setTargetAssetForAction(symbol);
+    setActiveTab('reports');
+  };
+
+  const activeDocs = documents.filter((d) => d.isActive);
+  const useOnlineOnly =
+    activeDocs.length === 0 ||
+    (activeDocs.length === 1 && activeDocs[0].id === 'doc-builtin-web-sources');
+  const combinedActiveContent = activeDocs
+    .map((d) => `=== ${d.name} ===\n${d.content}`)
+    .join('\n\n');
+
+  const activeDocSummaryLabel =
+    activeDocs.length === 0
+      ? 'Webs Financieras Online'
+      : activeDocs.length === 1
+      ? activeDocs[0].name
+      : `${activeDocs.length} Bases Activas`;
+
+  return (
+    <div
+      data-theme={settings.theme}
+      className="min-h-screen bg-[#0c0906] text-[#f5ede6] flex flex-col font-sans selection:bg-amber-600 selection:text-white transition-colors duration-300"
+    >
+      <Navbar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        session={session}
+        activeDocsCount={activeDocs.length}
+        totalDocsCount={documents.length}
+        settings={settings}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+      />
+
+      <main
+        className={`flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 ${
+          settings.compactCards ? 'py-3' : 'py-6'
+        }`}
+      >
+        {activeTab === 'terminal' && (
+          <MarketTerminal
+            instruments={instruments}
+            session={session}
+            onRefreshFeed={refreshFeed}
+            onRequestEntry={handleQuickRequestEntry}
+            onGenerateReport={handleQuickGenerateReport}
+            settings={settings}
+          />
+        )}
+
+        {activeTab === 'entries' && (
+          <TradeSetupEngine
+            initialAsset={targetAssetForAction}
+            session={session}
+            documents={documents}
+            onAddCustomDoc={handleAddCustomDoc}
+            onOpenKnowledgeTab={() => setActiveTab('knowledge')}
+            defaultBalance={settings.defaultBalance}
+            defaultRisk={settings.defaultRisk}
+            language={settings.language}
+          />
+        )}
+
+        {activeTab === 'reports' && (
+          <ReportGenerator
+            initialAsset={targetAssetForAction}
+            session={session}
+            activeDocName={activeDocSummaryLabel}
+            customDocContent={combinedActiveContent}
+            useOnlineOnly={useOnlineOnly}
+            onOpenKnowledgeTab={() => setActiveTab('knowledge')}
+            language={settings.language}
+          />
+        )}
+
+        {activeTab === 'knowledge' && (
+          <DocumentManager
+            documents={documents}
+            onToggleDocActive={handleToggleDocActive}
+            onActivateAllDocs={handleActivateAllDocs}
+            onDeactivateAllDocs={handleDeactivateAllDocs}
+            onAddCustomDoc={handleAddCustomDoc}
+            onDeleteDoc={handleDeleteDoc}
+            language={settings.language}
+          />
+        )}
+
+        {activeTab === 'newschat' && (
+          <NewsGeminiChat
+            language={settings.language}
+            session={session}
+            initialAsset={targetAssetForAction}
+            customDocContent={combinedActiveContent}
+          />
+        )}
+
+        {activeTab === 'calculator' && <PropFirmCalculator language={settings.language} />}
+      </main>
+
+      {/* Quick Floating Button to Open Gemini News Chat when on other tabs */}
+      {activeTab !== 'newschat' && (
+        <button
+          type="button"
+          onClick={() => setActiveTab('newschat')}
+          className="fixed bottom-5 right-5 z-30 px-4 py-2.5 rounded-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs shadow-2xl border border-amber-300/60 flex items-center gap-2 transition-transform hover:scale-105"
+          title={
+            settings.language === 'en'
+              ? 'Open Gemini Chat to resolve doubts about news'
+              : 'Abrir Chat Gemini para resolver dudas sobre noticias'
+          }
+        >
+          <Newspaper className="w-4 h-4" />
+          <span>
+            {settings.language === 'en' ? 'Gemini News Chat' : 'Dudas de Noticias (Gemini)'}
+          </span>
+          <Sparkles className="w-3.5 h-3.5" />
+        </button>
+      )}
+
+      {settings.showFooter && (
+        <footer className="border-t border-[#3b271a] bg-[#120d09]/90 py-5 mt-12 text-xs font-mono text-amber-200/50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-amber-300/80">
+              <Activity className="w-4 h-4 text-amber-500" />
+              <span className="font-bold text-white">TRstudio</span>
+              <span>•</span>
+              <span>
+                {settings.language === 'en'
+                  ? 'Market & Execution Terminal'
+                  : 'Terminal de Mercado & Ejecución'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 text-[11px] text-amber-300/60">
+              <span>4H / 1H / 30M / 15M / 5M</span>
+              <span>•</span>
+              <span>
+                {settings.language === 'en' ? 'New York Time' : 'Horario Nueva York'} (
+                {settings.timeFormat === '12h' ? '12h AM/PM' : '24h'})
+              </span>
+            </div>
+          </div>
+        </footer>
+      )}
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={settings}
+        onUpdateSettings={handleUpdateSettings}
+        onResetSettings={handleResetSettings}
+      />
+    </div>
+  );
+}

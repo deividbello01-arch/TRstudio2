@@ -1,0 +1,298 @@
+@import "tailwindcss";
+
+/* Default: Naranja / Café Original */
+:root,
+[data-theme="coffee"] {
+  --tr-bg-base: #0c0906;
+  --tr-text-base: #f5ede6;
+  --tr-surface-1: #100b07;
+  --tr-surface-2: #140d08;
+  --tr-surface-3: #18110b;
+  --tr-surface-4: #1e140d;
+  --tr-surface-5: #24170f;
+  --tr-surface-6: #312015;
+  --tr-border-1: #3b271a;
+  --tr-border-2: #573926;
+  --tr-accent-50: #fffbeb;
+  --tr-accent-100: #fef3c7;
+  --tr-accent-200: #fde68a;
+  --tr-accent-300: #fcd34d;
+  --tr-accent-400: #fbbf24;
+  --tr-accent-500: #f59e0b;
+  --tr-accent-600: #d97706;
+  --tr-accent-700: #b45309;
+  --tr-accent-800: #92400e;
+  --tr-accent-900: #78350f;
+  --tr-accent-950: #451a03;
+  --tr-btn-bg: #d97706;
+  --tr-btn-hover: #f59e0b;
+  --tr-btn-text: #ffffff;
+  --tr-marble-bg: none;
+}
+
+/* Option 2: Verde Salvia #DAF1DE */
+[data-theme="mint"] {
+  --tr-bg-base: #060b08;
+  --tr-text-base: #f0f7f2;
+  --tr-surface-1: #09110c;
+  --tr-surface-2: #0c1710;
+  --tr-surface-3: #0f1b13;
+  --tr-surface-4: #132218;
+  --tr-surface-5: #172a1e;
+  --tr-surface-6: #1e3627;
+  --tr-border-1: #213b2b;
+  --tr-border-2: #2d503a;
+  --tr-accent-50: #f4fbf6;
+  --tr-accent-100: #e8f7ec;
+  --tr-accent-200: #DAF1DE;
+  --tr-accent-300: #DAF1DE;
+  --tr-accent-400: #DAF1DE;
+  --tr-accent-500: #DAF1DE;
+  --tr-accent-600: #DAF1DE;
+  --tr-accent-700: #bfe4c6;
+  --tr-accent-800: #294c34;
+  --tr-accent-900: #193322;
+  --tr-accent-950: #0d1f14;
+  --tr-btn-bg: #DAF1DE;
+  --tr-btn-hover: #c5e8cb;
+  --tr-btn-text: #06150b;
+  --tr-marble-bg:
+    radial-gradient(ellipse 80% 50% at 15% 10%, rgba(218, 241, 222, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 65% 45% at 85% 80%, rgba(218, 241, 222, 0.04) 0%, transparent 65%);
+}
+
+/* Option 3: Rojo Claro & Negro Marmoleado */
+[data-theme="crimson"] {
+  --tr-bg-base: #050304;
+  --tr-text-base: #faf2f2;
+  --tr-surface-1: #090507;
+  --tr-surface-2: #0d0709;
+  --tr-surface-3: #12090c;
+  --tr-surface-4: #180c10;
+  --tr-surface-5: #221116;
+  --tr-surface-6: #2c151c;
+  --tr-border-1: #2b1319;
+  --tr-border-2: #451d26;
+  --tr-accent-50: #fff1f2;
+  --tr-accent-100: #ffe4e6;
+  --tr-accent-200: #fecdd3;
+  --tr-accent-300: #fda4af;
+  --tr-accent-400: #ff7a85;
+  --tr-accent-500: #ff6b6b;
+  --tr-accent-600: #f25c5c;
+  --tr-accent-700: #dc4444;
+  --tr-accent-800: #7f1d24;
+  --tr-accent-900: #4c1116;
+  --tr-accent-950: #29070a;
+  --tr-btn-bg: #ff6b6b;
+  --tr-btn-hover: #ff8282;
+  --tr-btn-text: #090304;
+  --tr-marble-bg:
+    radial-gradient(ellipse 80% 50% at 15% 10%, rgba(255, 107, 107, 0.075) 0%, transparent 60%),
+    radial-gradient(ellipse 65% 45% at 85% 25%, rgba(220, 38, 38, 0.055) 0%, transparent 65%),
+    radial-gradient(ellipse 75% 60% at 50% 90%, rgba(255, 122, 133, 0.06) 0%, transparent 65%),
+    linear-gradient(128deg, transparent 0%, rgba(255, 107, 107, 0.025) 32%, transparent 34%, transparent 68%, rgba(239, 68, 68, 0.03) 70%, transparent 72%),
+    linear-gradient(215deg, transparent 0%, rgba(255, 130, 130, 0.022) 46%, transparent 48%);
+}
+
+/* Option 4: Azul Institucional */
+[data-theme="midnight"] {
+  --tr-bg-base: #050912;
+  --tr-text-base: #e2e8f0;
+  --tr-surface-1: #080f1e;
+  --tr-surface-2: #0b1326;
+  --tr-surface-3: #0f1930;
+  --tr-surface-4: #13203d;
+  --tr-surface-5: #18294d;
+  --tr-surface-6: #1e335e;
+  --tr-border-1: #1e3156;
+  --tr-border-2: #2b477a;
+  --tr-accent-50: #f0f9ff;
+  --tr-accent-100: #e0f2fe;
+  --tr-accent-200: #bae6fd;
+  --tr-accent-300: #7dd3fc;
+  --tr-accent-400: #38bdf8;
+  --tr-accent-500: #0ea5e9;
+  --tr-accent-600: #0284c7;
+  --tr-accent-700: #0369a1;
+  --tr-accent-800: #075985;
+  --tr-accent-900: #0c4a6e;
+  --tr-accent-950: #082f49;
+  --tr-btn-bg: #0284c7;
+  --tr-btn-hover: #0ea5e9;
+  --tr-btn-text: #ffffff;
+  --tr-marble-bg:
+    radial-gradient(ellipse 80% 50% at 20% 10%, rgba(56, 189, 248, 0.06) 0%, transparent 60%);
+}
+
+/* Option 5: Esmeralda Quant */
+[data-theme="emerald"] {
+  --tr-bg-base: #040c09;
+  --tr-text-base: #ecfdf5;
+  --tr-surface-1: #07130e;
+  --tr-surface-2: #091913;
+  --tr-surface-3: #0c2119;
+  --tr-surface-4: #102a20;
+  --tr-surface-5: #143528;
+  --tr-surface-6: #1a4434;
+  --tr-border-1: #194233;
+  --tr-border-2: #245e48;
+  --tr-accent-50: #ecfdf5;
+  --tr-accent-100: #d1fae5;
+  --tr-accent-200: #a7f3d0;
+  --tr-accent-300: #6ee7b7;
+  --tr-accent-400: #34d399;
+  --tr-accent-500: #10b981;
+  --tr-accent-600: #059669;
+  --tr-accent-700: #047857;
+  --tr-accent-800: #065f46;
+  --tr-accent-900: #064e3b;
+  --tr-accent-950: #022c22;
+  --tr-btn-bg: #10b981;
+  --tr-btn-hover: #34d399;
+  --tr-btn-text: #03140e;
+  --tr-marble-bg:
+    radial-gradient(ellipse 80% 50% at 20% 10%, rgba(16, 185, 129, 0.06) 0%, transparent 60%);
+}
+
+/* Option 6: Negro Obsidiana Minimal */
+[data-theme="obsidian"] {
+  --tr-bg-base: #060608;
+  --tr-text-base: #f4f4f5;
+  --tr-surface-1: #0a0a0d;
+  --tr-surface-2: #0e0e12;
+  --tr-surface-3: #121217;
+  --tr-surface-4: #18181f;
+  --tr-surface-5: #1f1f29;
+  --tr-surface-6: #272733;
+  --tr-border-1: #27272a;
+  --tr-border-2: #3f3f46;
+  --tr-accent-50: #fafafa;
+  --tr-accent-100: #f4f4f5;
+  --tr-accent-200: #e4e4e7;
+  --tr-accent-300: #d4d4d8;
+  --tr-accent-400: #a1a1aa;
+  --tr-accent-500: #e4e4e7;
+  --tr-accent-600: #d4d4d8;
+  --tr-accent-700: #a1a1aa;
+  --tr-accent-800: #3f3f46;
+  --tr-accent-900: #27272a;
+  --tr-accent-950: #18181b;
+  --tr-btn-bg: #e4e4e7;
+  --tr-btn-hover: #ffffff;
+  --tr-btn-text: #09090b;
+  --tr-marble-bg: none;
+}
+
+@theme {
+  --color-amber-50: var(--tr-accent-50);
+  --color-amber-100: var(--tr-accent-100);
+  --color-amber-200: var(--tr-accent-200);
+  --color-amber-300: var(--tr-accent-300);
+  --color-amber-400: var(--tr-accent-400);
+  --color-amber-500: var(--tr-accent-500);
+  --color-amber-600: var(--tr-accent-600);
+  --color-amber-700: var(--tr-accent-700);
+  --color-amber-800: var(--tr-accent-800);
+  --color-amber-900: var(--tr-accent-900);
+  --color-amber-950: var(--tr-accent-950);
+}
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--tr-bg-base);
+    color: var(--tr-text-base);
+    overflow-x: hidden;
+  }
+
+  code, pre, .font-mono, [data-mono="true"] {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+}
+
+/* Apply theme background on main wrapper */
+[data-theme] {
+  background-color: var(--tr-bg-base) !important;
+  background-image: var(--tr-marble-bg) !important;
+  background-attachment: fixed;
+  color: var(--tr-text-base) !important;
+}
+
+/* Primary Action Buttons with dynamic high-contrast text */
+.bg-amber-500,
+.bg-amber-600,
+.bg-amber-700,
+.from-amber-600 {
+  background-color: var(--tr-btn-bg) !important;
+  background-image: none !important;
+  color: var(--tr-btn-text) !important;
+}
+
+.bg-amber-500:hover,
+.bg-amber-600:hover,
+.bg-amber-700:hover,
+.from-amber-600:hover {
+  background-color: var(--tr-btn-hover) !important;
+  color: var(--tr-btn-text) !important;
+}
+
+/* Dynamic Surface & Border Mapping */
+.bg-\[\#0c0906\] {
+  background-color: var(--tr-bg-base) !important;
+  background-image: var(--tr-marble-bg) !important;
+}
+.bg-\[\#120d09\], .bg-\[\#120d09\]\/95, .bg-\[\#120d09\]\/90 {
+  background-color: var(--tr-surface-1) !important;
+}
+.bg-\[\#120c08\], .bg-\[\#120c08\]\/90, .bg-\[\#100b07\], .bg-\[\#0f0a07\] {
+  background-color: var(--tr-surface-1) !important;
+}
+.bg-\[\#140d08\], .bg-\[\#140e09\], .bg-\[\#160f0a\], .bg-\[\#1a120b\], .bg-\[\#1a120b\]\/80 {
+  background-color: var(--tr-surface-2) !important;
+}
+.bg-\[\#18110b\], .bg-\[\#18110b\]\/50 {
+  background-color: var(--tr-surface-3) !important;
+}
+.bg-\[\#1e140d\], .bg-\[\#1e130c\], .bg-\[\#1f150e\], .bg-\[\#20150e\], .bg-\[\#22160f\] {
+  background-color: var(--tr-surface-4) !important;
+}
+.bg-\[\#24170f\], .bg-\[\#26180f\], .bg-\[\#261910\], .bg-\[\#291b12\], .bg-\[\#2b1c13\], .bg-\[\#2d1c12\], .bg-\[\#2e1d13\] {
+  background-color: var(--tr-surface-5) !important;
+}
+.bg-\[\#312015\], .bg-\[\#332014\], .bg-\[\#332116\], .bg-\[\#382519\], .bg-\[\#3b271a\] {
+  background-color: var(--tr-surface-6) !important;
+}
+
+.border-\[\#2d1c12\], .border-\[\#332014\], .border-\[\#3b271a\], .border-\[\#3b271a\]\/80, .border-\[\#3b271a\]\/60, .border-\[\#3d2719\] {
+  border-color: var(--tr-border-1) !important;
+}
+.border-\[\#422c1e\], .border-\[\#4a3222\], .border-\[\#4d3221\], .border-\[\#573926\] {
+  border-color: var(--tr-border-2) !important;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--tr-surface-1);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--tr-border-2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--tr-accent-500);
+}
+
+/* Custom animations */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

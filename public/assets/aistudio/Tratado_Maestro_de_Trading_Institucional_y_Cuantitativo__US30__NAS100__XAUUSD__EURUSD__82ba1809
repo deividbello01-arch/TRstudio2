@@ -1,0 +1,527 @@
+# TRATADO MAESTRO DE INVESTIGACIÓN FINANCIERA Y MICROESTRUCTURA DE MERCADO: US30, NAS100, XAU/USD Y EUR/USD
+**Base de Conocimiento Fundacional para Agentes de Inteligencia Artificial en Trading Intradía y Cuentas Fondeadas (Prop Firms)**
+**Arquitectura Temporal:** Estudio Estructural ($4\text{H}$ – $1\text{H}$) | Ejecución Táctica ($30\text{M}$ – $15\text{M}$ – $5\text{M}$)
+
+---
+
+## CAPÍTULO 1: RADIOGRAFÍA PROFUNDA Y MICROESTRUCTURA DE LOS 4 ACTIVOS
+
+Para que un agente de trading opere con ventaja estadística (*edge*), debe comprender que cada activo posee una "huella genética" diferente determinada por quiénes participan en ese mercado, cómo se calcula su precio y qué flujos institucionales lo mueven.
+
+---
+
+### 1.1. Dow Jones Industrial Average (`US30` / `DJIA` / Futuro `YM`)
+
+#### A. Naturaleza y Mecánica de Ponderación
+A diferencia de casi todos los índices modernos, el **Dow Jones Industrial Average** es un índice **ponderado por precio nominal de la acción** (*Price-Weighted Index*), no por capitalización bursátil. Se calcula sumando el precio de las $30$ acciones que lo componen y dividiéndolo por el *Dow Divisor* (un factor matemático que se ajusta ante *splits*, dividendos especiales o cambios de componentes):
+
+$$\text{DJIA} = \frac{\sum_{i=1}^{30} P_i}{D}$$
+
+Donde $P_i$ es el precio de cada una de las $30$ acciones y $D$ es el divisor del Dow.
+* **Implicación Crítica para el Agente:** Una empresa cuya acción cotiza a $\$500$ tiene $10$ veces más impacto en el movimiento por puntos del `US30` que una empresa cuya acción cotiza a $\$50$, sin importar cuál de las dos sea más grande en valor total de mercado.
+* **Componentes de Mayor Peso e Influencia:** Goldman Sachs (`GS`), UnitedHealth Group (`UNH`), Microsoft (`MSFT`), Home Depot (`HD`), Caterpillar (`CAT`), Amgen (`AMGN`), Salesforce (`CRM`), Visa (`V`), McDonald's (`MCD`) y American Express (`AXP`).
+* **Composición Sectorial:** Fuerte inclinación hacia **Finanzas, Salud, Industria Pesada y Consumo Cíclico**. Representa la economía tradicional e industrial ("Economía Real" o acciones *Value*).
+
+#### B. Personalidad del Precio y Microestructura Intradía ($5\text{M}$ – $30\text{M}$)
+1. **Barridos de Liquidez Iniciales (*Whipsaws*):** En los primeros $15$ minutos de la apertura de Nueva York ($09:30$ – $09:45\text{ EST}$), el `US30` tiende a generar mechas erráticas en ambas direcciones mientras abren individualmente las subastas de sus $30$ componentes en la Bolsa de Nueva York (NYSE).
+2. **Respeto a Niveles Históricos de $1\text{H}$ y $4\text{H}$:** Una vez pasa el ruido de los primeros $15$ minutos, el `US30` es técnicamente más noble en estructuras de soporte/resistencia clásicas y bloques de órdenes (*Order Blocks*) de $1\text{H}$ que el Nasdaq, debido a que sus acciones tienen menor beta especulativo.
+3. **Rotación Sectorial (Divergencia con Nasdaq):** En días donde suben los rendimientos de los bonos (`US10Y`) pero la economía es fuerte, el capital institucional sale de tecnología (`NAS100`) y entra en bancos e industriales (`US30`). Esto produce días donde el `US30` es fuertemente alcista mientras el `NAS100` cae o consolida.
+
+#### C. Métricas Operativas Cuantitativas
+* **Rango Diario Promedio ($ATR_{14}$ Diario):** Entre $350$ y $650\text{ puntos}$ en condiciones normales; supera los $800\text{–}1200\text{ puntos}$ en eventos macroeconómicos de alta volatilidad.
+* **Rango Promedio por Vela en Apertura NY ($5\text{M}$):** $45$ a $110\text{ puntos}$ por vela de $5\text{ minutos}$ entre las $09:30$ y las $10:15\text{ EST}$.
+* **Niveles Psicológicos Institucionales:** Números redondos cada $500$ y $1000\text{ puntos}$ (ej. $40,000$, $42,500$, $43,000$), seguidos por subniveles de $250\text{ puntos}$ ($000, 250, 500, 750$).
+
+---
+
+### 1.2. Nasdaq 100 (`NAS100` / `NDX` / `USTEC` / Futuro `NQ`)
+
+#### A. Naturaleza y Mecánica de Ponderación
+El **Nasdaq 100** agrupa a las $100$ mayores corporaciones **no financieras** listadas en la bolsa Nasdaq. Es un índice **ponderado por capitalización de mercado modificada** (*Modified Market-Cap Weighted*):
+
+$$\text{Peso}_i = \frac{\text{Precio}_i \times \text{Acciones en Circulación}_i}{\sum_{j=1}^{100} (\text{Precio}_j \times \text{Acciones en Circulación}_j)}$$
+
+* **Hiperconcentración en las "Magnificent 7":** Más del $40\%$ al $45\%$ del movimiento total del `NAS100` está dictado por solo $7$ a $8$ acciones: **Apple (`AAPL`), Microsoft (`MSFT`), Nvidia (`NVDA`), Amazon (`AMZN`), Meta (`META`), Alphabet (`GOOGL`), Broadcom (`AVGO`) y Tesla (`TSLA`)**.
+* **Implicación Crítica para el Agente:** Si `NVDA`, `AAPL` y `MSFT` están rompiendo sus máximos del día al unísono en gráficos de $5\text{M}$, es estadísticamente suicida que el agente venda `NAS100`, incluso si el gráfico del índice parece estar en una resistencia.
+
+#### B. Sensibilidad Macroeconómica
+Las empresas tecnológicas son activos de "larga duración" (*long-duration assets*) porque gran parte de sus flujos de caja proyectados están en el futuro lejano. Cuando la Reserva Federal sube las tasas de interés o el rendimiento del Bono del Tesoro a $10\text{ años}$ (`US10Y`) sube bruscamente, el valor presente neto ($VPN$) de esos flujos futuros cae:
+
+$$VPN = \sum_{t=1}^{T} \frac{FC_t}{(1 + r)^t}$$
+
+Por tanto, una subida agresiva en la tasa de descuento $r$ (`US10Y`) provoca ventas algorítmicas inmediatas en el `NAS100`.
+
+#### C. Personalidad del Precio y Microestructura Intradía ($5\text{M}$ – $30\text{M}$)
+1. **Tendencialidad Explosiva (*Momentum Engine*):** El `NAS100` es el activo más direccional de los cuatro. Cuando barre un nivel de liquidez en $1\text{H}$/$4\text{H}$ y confirma dirección, suele desarrollar tendencias intradía con retrocesos superficiales (respetando la $EMA_{20}$ en $5\text{M}$ y rellenando solo parcialmente los *Fair Value Gaps*).
+2. **Barridos Profundos de Liquidez (*Deep Sweeps*):** Antes de iniciar un movimiento de $200\text{ a }400\text{ puntos}$, el algoritmo del `NAS100` suele realizar un barrido violento de los stops acumulados por encima o por debajo del rango de pre-mercado ($08:00\text{–}09:30\text{ EST}$).
+3. **Alta Velocidad de Ejecución:** Las velas de desplazamiento en $5\text{M}$ son amplias y dejan marcadas ineficiencias (*Imbalances / FVG*), lo que lo hace el activo ideal para estrategias basadas en *Smart Money Concepts (SMC)* e *ICT*.
+
+#### D. Métricas Operativas Cuantitativas
+* **Rango Diario Promedio ($ATR_{14}$ Diario):** Entre $220$ y $480\text{ puntos}$ (en días de tendencia o noticias supera los $600\text{ puntos}$).
+* **Rango Promedio por Vela en Apertura NY ($5\text{M}$):** $25$ a $70\text{ puntos}$ por vela de $5\text{ minutos}$.
+* **Niveles Psicológicos Institucionales:** Cada $100\text{ puntos}$ (ej. $20,100$, $20,200$) y especialmente los niveles de $500$ y $1000\text{ puntos}$ ($20,000$, $20,500$, $21,000$).
+
+---
+
+### 1.3. Oro frente al Dólar Estadounidense (`XAU/USD` / Futuro `GC`)
+
+#### A. Naturaleza y Estructura Dual del Mercado
+El `XAU/USD` representa el precio de una onza troy de oro expresada en dólares estadounidenses. Su liquidez proviene de dos grandes centros interconectados:
+1. **Mercado OTC de Londres (LBMA - *London Bullion Market Association*):** Donde se negocia el oro físico al contado (*Spot*), dominando la liquidez durante la sesión de Londres ($02:00\text{–}08:00\text{ EST}$).
+2. **Mercado de Futuros de Nueva York (COMEX - grupo CME):** Donde se negocian los derivados financieros del oro, cuyo piso de negociación abre formalmente a las **$08:20\text{ EST}$**, provocando una inyección masiva de volumen.
+
+#### B. Motores Fundamentales del Oro
+1. **Tasas de Interés Reales de EE. UU. (TIPS):** Es el motor número uno del oro. Como el oro no paga dividendos ni cupones de interés, su costo de oportunidad depende de la tasa de interés real ($r_{\text{real}}$):
+   $$r_{\text{real}} = r_{\text{nominal (US10Y)}} - \pi_{\text{expectativa de inflación}}$$
+   * Si $r_{\text{real}}$ baja (porque bajan los bonos o sube la inflación), el `XAU/USD` sube fuertemente.
+   * Si $r_{\text{real}}$ sube agresivamente, el `XAU/USD` enfrenta presión bajista.
+2. **Riesgo Geopolítico y Demanda de Bancos Centrales:** Ante escaladas bélicas, crisis bancarias o incertidumbre soberana, el oro actúa como refugio seguro (*Safe Haven*). En estos regímenes de mercado, el `XAU/USD` rompe su correlación inversa con el `DXY` y **ambos suben simultáneamente**.
+
+#### C. Personalidad del Precio y Microestructura Intradía ($5\text{M}$ – $30\text{M}$)
+1. **Cazador de Liquidez implacable (*Stop Hunt Specialist*):** El oro es famoso por su comportamiento punitivo contra stops ajustados. Rara vez inicia un movimiento limpio desde un soporte/resistencia obvio sin antes perforarlo por $\$3\text{ a }\$12\text{ dólares}$ ($30\text{ a }120\text{ pips}$), activar todos los *Sell Stops* o *Buy Stops*, y luego revertir con violencia.
+2. **Simetría de Rangos y Expansiones:** Si el oro acumula durante $6\text{ horas}$ en Asia en un rango estrecho, la expansión en Londres o Nueva York suele proyectar múltiplos exactos ($1.5\times$, $2.0\times$ o $2.5\times$) de la altura de dicho rango.
+3. **Adherencia Extrema a Números Redondos:** El flujo de opciones sobre el oro (en COMEX) se concentra masivamente en precios terminados en $\$00$, $\$50$, $\$20$ y $\$80$ (ej. $\$2,700$, $\$2,750$, $\$2,780$).
+
+#### D. Métricas Operativas Cuantitativas
+* **Equivalencia de Pips y Puntos:** En la mayoría de cuentas fondeadas, $1\text{ dólar}$ de movimiento en el precio del oro (ej. de $\$2,700.00$ a $\$2,701.00$) equivale a **$10\text{ pips}$** (o $100\text{ puntos/ticks}$ si cotiza con dos decimales).
+* **Rango Diario Promedio ($ATR_{14}$ Diario):** Entre $\$30$ y $\$75\text{ dólares}$ ($300\text{ a }750\text{ pips}$) en condiciones estándar, pudiendo superar $\$90\text{–}\$150\text{ dólares}$ en días de alta tensión geopolítica o datos de inflación/Fed.
+* **Stop Loss Mínimo Viable en $5\text{M}$–$15\text{M}$:** Un Stop Loss menor a $\$3.50\text{–}\$5.00\text{ dólares}$ ($35\text{–}50\text{ pips}$) en la sesión de Nueva York tiene una alta probabilidad estadística de ser barrido por el ruido normal de la microestructura.
+
+---
+
+### 1.4. Euro frente al Dólar Estadounidense (`EUR/USD` / Futuro `6E`)
+
+#### A. Naturaleza y Dominio en el Índice Dólar (`DXY`)
+El `EUR/USD` es el par de divisas más líquido y negociado del planeta, absorbiendo cerca del $22\%\text{–}25\%$ de todas las transacciones diarias del mercado Forex global.
+Su relación con el **Índice del Dólar Estadounidense (`DXY`)** es matemática y estructural, ya que el Euro compone el **$57.6\%$ de la canasta del `DXY`**:
+
+$$\text{DXY} = 50.14348112 \times (\text{EUR/USD})^{-0.576} \times (\text{USD/JPY})^{0.136} \times (\text{GBP/USD})^{-0.119} \times (\text{USD/CAD})^{0.091} \times (\text{USD/SEK})^{0.042} \times (\text{USD/CHF})^{0.036}$$
+
+* **Implicación Crítica para el Agente:** El `EUR/USD` es prácticamente el espejo inverso del `DXY` (correlación histórica de $-0.92$ a $-0.98$). Cualquier anomalía entre ambos (divergencia SMT) revela intervención institucional directa en el Euro o en otra divisa de la canasta.
+
+#### B. Motores Fundamentales del `EUR/USD`
+1. **Diferencial de Rendimientos a $2\text{ Años}$ (Spread `DE02Y` vs `US02Y`):** El flujo de capital institucional entre Europa y EE. UU. sigue la diferencia entre el rendimiento del Bono Alemán a $2\text{ años}$ (*Schatz*) y el Bono del Tesoro de EE. UU. a $2\text{ años}$:
+   $$\Delta \text{Yield}_{2Y} = \text{Yield}_{\text{Alemania } 2Y} - \text{Yield}_{\text{EE. UU. } 2Y}$$
+   Si $\Delta \text{Yield}_{2Y}$ sube, el `EUR/USD` tiene presión alcista fundamental; si cae, tiene presión bajista.
+2. **Divergencia de Política Monetaria (BCE vs Fed):** Declaraciones de la presidencia del Banco Central Europeo (Lagarde) frente a la Reserva Federal (Powell).
+
+#### C. Personalidad del Precio y Microestructura Intradía ($5\text{M}$ – $30\text{M}$)
+1. **Eficiencia Algorítmica y Precisión Técnica:** Debido a su profunda liquidez en todos los niveles del libro de órdenes (*Order Book*), el `EUR/USD` rara vez hace mechas descontroladas sin noticias. Respeta con exactitud quirúrgica los *Fair Value Gaps (FVG)*, *Order Blocks* y niveles de Fibonacci ($61.8\%$ y $70.5\%$ OTE).
+2. **Tendencia al Rebalanceo y Reversión a la Media:** A diferencia del `NAS100` (que puede correr en línea recta durante horas), el `EUR/USD` avanza en escalones: hace un impulso de $25\text{–}40\text{ pips}$, retrocede el $50\%\text{–}61.8\%$ para rebalancear la liquidez, y luego hace el siguiente impulso.
+3. **Bajísimo Costo de Transacción:** Es el mejor activo para cuentas fondeadas en términos de costos operativos, ya que su spread en cuentas *Raw/ECN* suele ser de $0.0\text{ a }0.5\text{ pips}$.
+
+#### D. Métricas Operativas Cuantitativas
+* **Rango Diario Promedio ($ATR_{14}$ Diario):** Entre $55$ y $95\text{ pips}$ en condiciones normales ($100\text{ a }140\text{ pips}$ en días de IPC o FOMC/BCE).
+* **Stop Loss Típico en $5\text{M}$–$15\text{M}$:** Entre $7$ y $18\text{ pips}$. Permite posiciones con excelente ratio Riesgo:Beneficio ($1:3$) buscando recorridos intradía conservadores de $25\text{ a }45\text{ pips}$.
+* **Niveles Psicológicos Institucionales:** Figuras completas (`.0000`, ej. $1.0800$, $1.0900$), medias figuras (`.0050`, ej. $1.0850$) y cuartos de figura (`.0020` y `.0080`).
+
+---
+
+## CAPÍTULO 2: CRONOLOGÍA ALGORÍTMICA DEL MERCADO (HORARIOS, SESIONES Y CICLOS DE TIEMPO)
+
+En el trading algorítmico e institucional, **el precio es secundario al tiempo**. Un mismo patrón de velas en $5\text{M}$ tiene un $70\%$ de probabilidad de éxito a las $09:45\text{ EST}$ y menos de un $25\%$ de probabilidad a las $18:30\text{ EST}$.
+
+> **Nota sobre Husos Horarios para el Agente:**
+> * **Referencia Base del Algoritmo:** Siempre debe programarse en **Hora de Nueva York (`America/New_York`)**, ya que los algoritmos bancarios ajustan automáticamente su ejecución al horario de verano (*EDT, UTC-4*, de marzo a noviembre) y al horario de invierno (*EST, UTC-5*, de noviembre a marzo).
+> * **Equivalencia en República Dominicana (AST, UTC-4 fijo todo el año):**
+>   * De **marzo a noviembre** (Verano EE. UU.): $\text{Hora RD} = \text{Hora NY}$.
+>   * De **noviembre a marzo** (Invierno EE. UU.): $\text{Hora RD} = \text{Hora NY} + 1\text{ hora}$.
+
+---
+
+### 2.1. Mapa Maestro de las 24 Horas de Negociación
+
+| Ventana Horaria (Hora NY) | Equivalencia Invierno RD (AST) | Nombre Técnico de la Ventana | Estado de Volatilidad y Liquidez | Comportamiento Específico por Activo y Regla del Agente |
+| :--- | :--- | :--- | :--- | :--- |
+| **$17:00\text{ – }19:00$** | $18:00\text{ – }20:00$ | **Rollover Bancario y Apertura de Sídney** | Liquidez nula / Spreads altísimos | **BLOQUEO TOTAL DE EJECUCIÓN.** Cierre contable del día en servidores bancarios. Los spreads en `XAU/USD`, `EUR/USD` e índices se ensanchan drásticamente. |
+| **$19:00\text{ – }00:00$** | $20:00\text{ – }01:00$ | **Rango Asiático (Tokio)** | Baja en los 4 activos | **MODO LECTURA.** El precio consolida en rango estrecho. El agente calcula y guarda el `Asian_High` y `Asian_Low`. |
+| **$00:00\text{ – }02:00$** | $01:00\text{ – }03:00$ | **Apertura Medianoche NY y Pre-Londres** | Baja a Moderada | A las **$00:00\text{ EST}$** se registra el **True Day Open (Precio de Apertura de Medianoche de NY)**, nivel pivote institucional clave para el resto del día. |
+| **$02:00\text{ – }05:00$** | $03:00\text{ – }06:00$ | **London Open Killzone (Apertura Europea)** | **ALTA** en `EUR/USD` y `XAU/USD` / Media en Índices | **VENTANA OPERATIVA #1 (`EUR/USD` y `XAU/USD`).** A las $02:00\text{ EST}$ abre Frankfurt y a las $03:00\text{ EST}$ Londres. Barrido del rango asiático (*Judas Swing*) y primer gran movimiento direccional del día. |
+| **$05:00\text{ – }08:00$** | $06:00\text{ – }09:00$ | **Almuerzo de Londres / Transición** | Baja a Moderada | Pausa o retroceso del movimiento de Londres. El agente marca el `London_High` y `London_Low` como objetivos de liquidez para Nueva York. |
+| **$08:00\text{ – }09:30$** | $09:00\text{ – }10:30$ | **NY Forex & Gold Open (Solapamiento Londres-NY)** | **MUY ALTA** en `EUR/USD` y `XAU/USD` | **VENTANA OPERATIVA #2 (`XAU/USD` y `EUR/USD`).** A las **$08:20\text{ EST}$** abre el piso de futuros COMEX para el Oro. A las **$08:30\text{ EST}$** salen las noticias macro más importantes de EE. UU. |
+| **$09:30\text{ – }11:00$** | $10:30\text{ – }12:00$ | **NY Cash Open Killzone (Apertura Wall Street)** | **EXTREMA** en `US30`, `NAS100` y `XAU/USD` | **VENTANA OPERATIVA #3 (`US30`, `NAS100`, `XAU/USD`).** A las **$09:30\text{ EST}$** abre la bolsa de valores de NY. De $09:30\text{ a }09:45$ ocurre la manipulación inicial; de **$10:00\text{ a }11:00\text{ EST}$** (*Silver Bullet AM*) se da el movimiento más limpio de índices. |
+| **$10:30\text{ – }12:00$** | $11:30\text{ – }13:00$ | **London Close Killzone (Cierre Europeo)** | Moderada a Alta | A las **$11:00\text{ EST}$** ($16:00\text{ GMT}$) ocurre el *WMR London Fix* de divisas. Los bancos europeos cierran posiciones; suele causar retrocesos en `EUR/USD` y `XAU/USD`. |
+| **$12:00\text{ – }13:30$** | $13:00\text{ – }14:30$ | **Almuerzo de Nueva York (NY Lunch)** | Baja / Errática | **PAUSA OPERATIVA.** Caída de volumen institucional. Alta probabilidad de rangos laterales que atrapan a algoritmos de seguimiento de tendencia. |
+| **$13:30\text{ – }16:00$** | $14:30\text{ – }17:00$ | **Sesión PM de Nueva York & Cierre** | Alta en `US30` y `NAS100` | **VENTANA OPERATIVA #4 (`US30` y `NAS100`).** De $14:00\text{ a }15:00\text{ EST}$ (*Silver Bullet PM*). Entre $15:00\text{ y }16:00\text{ EST}$ (*Power Hour* / órdenes *Market-On-Close*), fuerte direccionalidad en índices. (Días de FOMC: noticia a las $14:00\text{ EST}$). |
+
+---
+
+### 2.2. El Ciclo Diario "Power of Three" (AMD: Acumulación, Manipulación, Distribución)
+
+Toda vela diaria ($1\text{D}$) o de $4\text{ Horas}$ ($4\text{H}$) se construye internamente mediante una secuencia algorítmica de tres fases que tu agente debe rastrear usando el **Precio de Apertura de Medianoche ($00:00\text{ EST}$)** y el **Precio de Apertura de las $08:30\text{ / }09:30\text{ EST}$**:
+
+```
+   DÍA ALCISTA INSTITUCIONAL (BULLISH AMD)                DÍA BAJISTA INSTITUCIONAL (BEARISH AMD)
+
+                       [Cierre NY]                                        [2. Manipulación: Judas Swing]
+                           ▲                                                      ▲   (Barre PDH/Asia High)
+                           │  3. Distribución                                     │
+                           │     (Expansión NY)          [Apertura 00:00 EST] ────┼────┐
+  [Apertura 00:00 EST] ────┼────┐                        │  1. Acumulación        │    │
+  │  1. Acumulación        │    │                        └─── (Rango Asiático) ───┘    │
+  └─── (Rango Asiático) ───┘    │                                                      │ 3. Distribución
+                                ▼                                                      ▼    (Expansión NY)
+                   [2. Manipulación: Judas Swing]                                 [Cierre NY]
+                      (Barre PDL/Asia Low)
+```
+
+1. **Fase 1 – Acumulación (Consolidación):** Ocurre durante Asia ($19:00\text{–}02:00\text{ EST}$) para Londres, o entre las $05:00\text{ y }08:30\text{ EST}$ antes de Nueva York. Las órdenes de *Buy Stop* se acumulan justo por encima de los máximos del rango y los *Sell Stop* justo por debajo de los mínimos.
+2. **Fase 2 – Manipulación (*Judas Swing*):** Al abrir la Killzone (Londres $02:00\text{–}03:30\text{ EST}$ o NY $08:30\text{–}09:45\text{ EST}$), el precio realiza un movimiento rápido en la dirección **falsa**.
+   * **Regla de Oro para el Agente:** Si el sesgo estructural en $4\text{H}$ y $1\text{H}$ es **Alcista**, el agente **solo debe buscar compras cuando el precio se encuentre por debajo del Precio de Apertura de las $00:00\text{ EST}$** (o por debajo del precio de apertura de las $08:30\text{ EST}$ en índices), aprovechando el descuento creado por la manipulación bajista.
+   * Si el sesgo en $4\text{H}$ y $1\text{H}$ es **Bajista**, el agente **solo debe buscar ventas cuando el precio cotice por encima del Precio de Apertura de las $00:00\text{ EST}$**.
+3. **Fase 3 – Distribución (Expansión Real):** Una vez absorbida la liquidez del extremo manipulado y confirmado el cambio de estructura en $5\text{M}$/$15\text{M}$, el precio se expande hacia el extremo opuesto del rango y busca niveles de liquidez de $1\text{H}$/$4\text{H}$.
+
+---
+
+### 2.3. Perfil Estadístico por Día de la Semana (Ciclo Semanal)
+
+El agente debe ajustar su agresividad y sus objetivos de *Take Profit* según el día de la semana:
+
+* **Lunes (Creación de Rango Semanal):**
+  * Menor volatilidad promedio durante Asia y Londres. El mercado digiere el flujo de órdenes del fin de semana.
+  * Estrategia del Agente: Operar reversiones a la media o recorridos cortos ($1:2\text{ R:R}$). Evitar operar rupturas (*breakouts*) porque la tasa de falsos rompimientos los lunes supera el $65\%$.
+* **Martes y Miércoles (Formación del Extremo Semanal y Expansión):**
+  * Estadísticamente, en más del **$70\%$ de las semanas**, el **Máximo o el Mínimo de toda la semana** se forma entre el martes en Londres y el miércoles en la mañana de Nueva York.
+  * Estrategia del Agente: Máxima efectividad para setups tendenciales en $1\text{H} \rightarrow 5\text{M}$. Permitir objetivos de beneficio extendidos ($1:3\text{ a }1:4\text{ R:R}$).
+* **Jueves (Continuación o Reversión de Mitad de Semana):**
+  * A las $08:30\text{ EST}$ se publican religiosamente las **Peticiones Iniciales de Subsidio por Desempleo (*Initial Jobless Claims*)** en EE. UU., que mueven con fuerza el `XAU/USD`, `US30` y `NAS100`.
+  * Si martes y miércoles tuvieron una tendencia unidireccional extrema, el jueves suele presentar un barrido profundo antes de continuar o iniciar el retroceso semanal.
+* **Viernes (Realización de Beneficios y Cierre Semanal):**
+  * La actividad institucional se concentra entre las **$08:30\text{ y las }11:00\text{ EST}$**. Después de las $11:30\text{ EST}$, el volumen cae drásticamente o el precio retrocede parte del movimiento semanal por cierre de posiciones institucionales (*Profit Taking*).
+  * Estrategia del Agente: **Desactivar nuevas entradas después de las $11:30\text{ EST}$** y cerrar todas las operaciones abiertas antes de las $15:30\text{ EST}$ (la mayoría de las cuentas fondeadas penalizan o cobran swaps triples/altos por dejar posiciones el fin de semana, además del riesgo de *Gaps* el domingo a las $18:00\text{ EST}$).
+
+---
+
+## CAPÍTULO 3: MARCO MATEMÁTICO Y ESTRUCTURAL DE ESTUDIO EN $4\text{H}$ Y $1\text{H}$
+
+El módulo de estudio del agente analiza exclusivamente las velas de **$4\text{ Horas}$ ($4\text{H}$) y $1\text{ Hora}$ ($1\text{H}$)**. Su propósito no es disparar órdenes, sino construir un mapa de coordenadas exactas: **Sesgo Direccional (*Bias*)**, **Piscinas de Liquidez (*Draw on Liquidity*)** y **Zonas de Interés (*Points of Interest - POI*)**.
+
+---
+
+### 3.1. Definición Matemática de Estructura de Mercado ($4\text{H}$ y $1\text{H}$)
+
+Para que tu código en Python o Node.js no dependa de interpretaciones subjetivas, el agente debe definir los puntos estructurales mediante **Fractales de $N$ velas** (típicamente $N = 2$ a cada lado, es decir, un patrón de $5$ velas):
+
+1. **Swing High (Alto Estructural Fractal $SH_i$):**
+   Una vela en el índice temporal $t$ es un *Swing High* confirmado cuando:
+   $$H_t > H_{t-1}, \quad H_t > H_{t-2} \quad \text{y} \quad H_t > H_{t+1}, \quad H_t > H_{t+2}$$
+2. **Swing Low (Bajo Estructural Fractal $SL_i$):**
+   Una vela en el índice temporal $t$ es un *Swing Low* confirmado cuando:
+   $$L_t < L_{t-1}, \quad L_t < L_{t-2} \quad \text{y} \quad L_t < L_{t+1}, \quad L_t < L_{t+2}$$
+
+#### Reglas de Transición de Estado Estructural (Tendencia):
+* **Break of Structure Alcista ($\text{BOS}_{\text{Bullish}}$):** En una tendencia alcista previa, una vela de $1\text{H}$ o $4\text{H}$ cierra **con el cuerpo completo** por encima del último *Swing High* ($C_{\text{actual}} > SH_{\text{previo}}$).
+  * *Nota Crítica:* Si solo la mecha supera el $SH_{\text{previo}}$ pero el cuerpo cierra por debajo ($H_{\text{actual}} > SH_{\text{previo}}$ y $C_{\text{actual}} \le SH_{\text{previo}}$), el agente **NO** lo clasifica como ruptura de estructura, sino como un **Barrido de Liquidez (*Liquidity Sweep* / *Turtle Soup*)**.
+* **Market Structure Shift / Change of Character ($\text{MSS}$ / $\text{CHoCH}$):** Ocurre cuando el precio viene en una tendencia (ej. bajista haciendo $LL$ y $LH$), toca un nivel mayor de $4\text{H}$/Diario, y por primera vez una vela cierra con cuerpo completo rompiendo el último *Lower High* ($LH$) que originó el mínimo más bajo.
+
+---
+
+### 3.2. Clasificación Algorítmica de Zonas de Interés (POI) en $1\text{H}$ y $4\text{H}$
+
+El agente debe escanear las últimas $100$ velas de $1\text{H}$ y $4\text{H}$ y almacenar en una base de datos en memoria los siguientes objetos geométricos:
+
+#### 1. Fair Value Gaps (FVG / Ineficiencias de Liquidez)
+Es un patrón de $3$ velas consecutivas ($t-2, t-1, t$) donde la vela central ($t-1$) tuvo un desplazamiento tan fuerte que las mechas de la vela $t-2$ y la vela $t$ no se solapan:
+* **FVG Alcista (*BISI - Buy-Side Imbalance, Sell-Side Inefficiency*):**
+  $$\text{Condición: } L_t > H_{t-2} \quad \longrightarrow \quad \text{Zona FVG} = [H_{t-2}, \, L_t]$$
+* **FVG Bajista (*SIBI - Sell-Side Imbalance, Buy-Side Inefficiency*):**
+  $$\text{Condición: } H_t < L_{t-2} \quad \longrightarrow \quad \text{Zona FVG} = [H_t, \, L_{t-2}]$$
+* **Consequent Encroachment (CE - Punto Medio del FVG):** Es el nivel del $50\%$ exacto del FVG:
+  $$CE = \frac{\text{Límite Superior}_{\text{FVG}} + \text{Límite Inferior}_{\text{FVG}}}{2}$$
+  En `NAS100`, `US30` y `EUR/USD`, el nivel $CE$ de un FVG de $1\text{H}$ o $4\text{H}$ actúa como el punto de rebote de mayor precisión institucional.
+
+#### 2. Order Blocks Institucionales (OB) de Alta Probabilidad
+No cualquier vela de color contrario es un *Order Block*. Para que el agente valide un Order Block en $1\text{H}$ o $4\text{H}$, debe cumplir **3 requisitos obligatorios**:
+1. **Barrido Previo:** La vela del Order Block (o la inmediatamente anterior) debe haber barrido liquidez de una vela previa ($L_{OB} < L_{t-1}$ para alcista; $H_{OB} > H_{t-1}$ para bajista).
+2. **Desplazamiento con FVG:** El movimiento que sale del Order Block debe generar un *Fair Value Gap* y tener un rango de cuerpo al menos $1.5\times$ superior al $ATR_{14}$.
+3. **Ruptura Estructural:** El impulso originado en ese Order Block debe producir un $\text{BOS}$ o $\text{MSS}$.
+
+#### 3. Matriz de Equilibrio (Premium vs. Discount)
+Para cada rango operativo vigente en $1\text{H}$ o $4\text{H}$ definido entre un *Swing Low* ($P_{\min}$) y un *Swing High* ($P_{\max}$), el agente calcula el punto de equilibrio ($E_{50\%}$):
+
+$$E_{50\%} = P_{\min} + 0.50 \times (P_{\max} - P_{\min})$$
+
+* **Zona Premium ($P > E_{50\%}$):** El activo está "caro" respecto al rango actual. Prohibido abrir compras de continuación; es zona exclusiva para buscar ventas (especialmente en la **Zona OTE - *Optimal Trade Entry*** entre el $61.8\%$ y el $78.6\%$ de retroceso).
+* **Zona Discount ($P < E_{50\%}$):** El activo está "barato" respecto al rango actual. Zona exclusiva para buscar compras si la tendencia macro es alcista.
+
+---
+
+### 3.3. Mapa de Liquidez Institucional (*Draw on Liquidity*)
+
+El precio se mueve en el mercado por una única razón mecánica: **buscar órdenes contrarias para emparejar grandes volúmenes institucionales**. Tu agente debe mantener actualizada una lista jerárquica de objetivos de liquidez:
+
+1. **Liquidez Externa Mayor (Diaria y Semanal):**
+   * `PWH` / `PWL` (*Previous Week High / Low*): Máximo y mínimo de la semana anterior.
+   * `PDH` / `PDL` (*Previous Day High / Low*): Máximo y mínimo del día anterior. Su barrido en Londres o NY genera las mejores configuraciones de reversión o continuación de toda la jornada.
+2. **Liquidez de Sesión (Intradía):**
+   * `Asian_High` / `Asian_Low` ($19:00\text{–}02:00\text{ EST}$).
+   * `London_High` / `London_Low` ($02:00\text{–}08:00\text{ EST}$).
+   * `PreMarket_High` / `PreMarket_Low` ($08:00\text{–}09:29\text{ EST}$ para `US30` y `NAS100`).
+3. **Piscinas de Liquidez Ingeniería (*Equal Highs / Equal Lows*):**
+   * Dos o más techos o suelos en $1\text{H}$ o $15\text{M}$ que se encuentran a una distancia menor o igual a $0.15 \times ATR_{14}$ entre sí:
+     $$|SH_1 - SH_2| \le 0.15 \times ATR_{14}$$
+   * Los traders minoristas ven ahí un "doble techo/suelo fuerte"; el algoritmo institucional ve miles de órdenes *Stop Loss* agrupadas que sirven como imán del precio.
+
+---
+
+## CAPÍTULO 4: PROTOCOLOS DE EJECUCIÓN EN $30\text{M}$, $15\text{M}$ Y $5\text{M}$ (ESTRATEGIAS PASO A PASO)
+
+Cuando el reloj entra en una **Killzone activa** y el precio interactúa con un **POI o Nivel de Liquidez de $4\text{H}$/$1\text{H}$**, se activa el motor de ejecución en temporalidades bajas ($30\text{M}$, $15\text{M}$ y $5\text{M}$).
+
+---
+
+### 4.1. Flujo de Sincronización Multitemporal (De $4\text{H}$ a $5\text{M}$)
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ PASO 1: ESTUDIO ESTRUCTURAL EN 4H Y 1H (Actualización cada 60 min)         │
+│  • Identificar tendencia dominante (HH/HL o LH/LL).                        │
+│  • Marcar PDH, PDL, Extremos de Asia/Londres, FVG y Order Blocks de 1H/4H. │
+│  • Determinar ubicación actual en matriz Premium (>50%) o Discount (<50%). │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ PASO 2: VALIDACIÓN DE CONTEXTO EN 30M Y 15M (Dentro de Killzone Activa)    │
+│  • Esperar que el precio toque el POI de 1H/4H o barra un nivel de         │
+│    liquidez (Sweep de PDL, Asian Low, London High, etc.).                  │
+│  • Confirmar rechazo en 15M/30M: Mecha de absorción + Cierre dentro del    │
+│    rango + Pico de volumen (>1.3x media de 20 velas).                      │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ PASO 3: GATILLO DE PRECISIÓN EN 5M (Ejecución de la Orden)                 │
+│  • Esperar ruptura de microestructura en 5M (MSS/CHoCH) con desplazamiento │
+│    fuerte (Cuerpo de vela > 1.2x ATR de 5M) que cree un FVG en 5M.         │
+│  • Colocar orden Limit en el inicio o 50% (CE) del FVG de 5M.              │
+│  • Stop Loss técnico detrás del extremo del barrido + colchón de spread.   │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 4.2. Playbook #1: Estrategia "Wall Street Open Judas Swing" (`NAS100` y `US30`)
+
+* **Horario de Ejecución:** $09:30\text{ – }10:30\text{ EST}$ ($10:30\text{ – }11:30\text{ AST}$ en invierno).
+* **Temporalidades:** Mapa en $1\text{H}$ | Confirmación en $15\text{M}$ | Disparo en $5\text{M}$.
+* **Lógica Cuantitativa:** Al abrir la bolsa de valores de Nueva York a las $09:30\text{ EST}$, el exceso de órdenes acumuladas genera una primera excursión falsa de entre $8$ y $20\text{ minutos}$ para barrer la liquidez del rango pre-mercado ($08:00\text{–}09:29\text{ EST}$) y conectar con un bloque de órdenes o FVG de $1\text{H}$.
+
+#### Reglas Algorítmicas de Entrada (Ejemplo Compra / Long):
+1. **Contexto $1\text{H}$/$4\text{H}$:** Estructura alcista en $1\text{H}$ o precio en zona de descuento de $4\text{H}$.
+2. **Rango Pre-Mercado:** A las $09:29:59\text{ EST}$, el agente registra `PM_High` y `PM_Low` (máximo y mínimo entre $08:00$ y $09:29\text{ EST}$).
+3. **El Barrido ($09:30\text{ – }09:50\text{ EST}$):** El precio cae rápidamente por debajo de `PM_Low` (o barre el mínimo de Londres) y entra en un FVG u Order Block alcista de $1\text{H}$/$15\text{M}$.
+4. **Filtro Institucional VWAP:** El precio gira al alza y una vela de $5\text{M}$ cierra con cuerpo completo por encima del último *Swing High* interno de $5\text{M}$ ($\text{MSS}$) **y** recupera el **VWAP intradía**, dejando un FVG alcista en $5\text{M}$.
+5. **Ejecución:** Orden *Buy Limit* en el límite superior del FVG de $5\text{M}$ (o entrada a mercado al cierre si el retroceso ya tocó el FVG).
+6. **Stop Loss:** Mínimo del barrido de las $09:30\text{ EST}$ menos $0.5 \times ATR_{14 (5\text{M})}$ (típicamente $25\text{–}45\text{ puntos}$ en `NAS100` o $50\text{–}90\text{ puntos}$ en `US30`).
+7. **Take Profit:**
+   * $TP_1$ ($50\%$ de la posición): En el `PM_High` (extremo opuesto del pre-mercado). Al tocar $TP_1$, mover Stop Loss a *Break Even*.
+   * $TP_2$ ($50\%$ restante): En el `PDH` o siguiente zona de liquidez de $1\text{H}$ ($R:R$ típico de $1:2.5$ a $1:4$).
+
+---
+
+### 4.3. Playbook #2: Estrategia "Silver Bullet de las $10:00\text{ AM}$" (`NAS100`, `US30` y `EUR/USD`)
+
+* **Horario de Ejecución Estricto:** $10:00\text{ – }11:00\text{ EST}$ (existe una versión en Londres de $03:00\text{ – }04:00\text{ EST}$ ideal para `EUR/USD`).
+* **Lógica Cuantitativa:** A las $10:00\text{ EST}$ ya pasó la volatilidad caótica de las $09:30\text{ EST}$ y se acaban de publicar los datos macroeconómicos de las $10:00\text{ EST}$ (ISM Manufacturero/Servicios, Confianza del Consumidor, JOLTS). Entre las $10:00$ y las $11:00\text{ EST}$, los algoritmos institucionales ejecutan órdenes programadas TWAP/VWAP hacia la siguiente piscina de liquidez obvia.
+
+#### Reglas Algorítmicas de Entrada:
+1. **Identificación del Imán de Liquidez ($10:00\text{ EST}$):** El agente identifica cuál es la piscina de liquidez de $1\text{H}$/$15\text{M}$ más cercana que **aún no ha sido tomada** en la dirección de la tendencia (ej. el máximo de las $09:30\text{ EST}$, el máximo de Londres o el `PDH`). La distancia hasta ese objetivo debe ser de al menos $40\text{ puntos}$ en `NAS100`, $80\text{ puntos}$ en `US30` o $15\text{ pips}$ en `EUR/USD`.
+2. **Disparo en $5\text{M}$:** El agente espera el **primer Fair Value Gap (FVG) limpio de $5\text{M}$** que se forme entre las $10:00$ y las $10:45\text{ EST}$ apuntando hacia ese objetivo de liquidez.
+3. **Ejecución y Gestión:** Entrada en el retroceso al FVG de $5\text{M}$, Stop Loss detrás de la primera vela que compone el FVG (o del *Swing* inmediato), y salida directa en la piscina de liquidez identificada.
+
+---
+
+### 4.4. Playbook #3: Estrategia "Caza de Stops de Sesión y Expansión COMEX" (`XAU/USD`)
+
+* **Horarios de Ejecución:**
+  * Ventana Londres: $02:00\text{ – }04:30\text{ EST}$
+  * Ventana NY / COMEX: $08:20\text{ – }10:15\text{ EST}$
+* **Lógica Cuantitativa:** El oro utiliza los rangos de consolidación previos para acumular órdenes en ambos lados y luego realiza una barrida falsa (*Judas Swing*) antes del movimiento verdadero de $\$15\text{ a }\$40\text{ dólares}$ ($150\text{ a }400\text{ pips}$).
+
+#### Reglas Algorítmicas de Entrada:
+1. **Filtro de Rango Asiático (para operar en Londres) o Rango Londres (para operar en NY):**
+   * Si la amplitud del rango de Asia ($19:00\text{–}02:00\text{ EST}$) es menor al $40\%$ del $ATR_{14}$ diario del oro, el mercado está comprimido y listo para expandir.
+2. **Detección de la Trampa en $15\text{M}$ / $30\text{M}$:**
+   * Al abrir Londres ($02:00\text{ EST}$) o el COMEX ($08:20\text{ EST}$), el precio rompe el `Asian_High` o `Asian_Low` (o el extremo de Londres en NY) por entre $\$2$ y $\$8\text{ dólares}$ ($20\text{–}80\text{ pips}$), tocando un nivel de $1\text{H}$/$4\text{H}$.
+   * **Condición de Rechazo Cuantitativo en $15\text{M}$:** La vela de $15\text{M}$ cierra de nuevo **dentro** del rango previo y su mecha de rechazo representa al menos el $50\%$ del tamaño total de la vela:
+     $$\text{Wick Ratio} = \frac{\text{Longitud de la Mecha de Barrido}}{H_{15\text{M}} - L_{15\text{M}}} \ge 0.50$$
+3. **Confirmación en $5\text{M}$:**
+   * Ruptura de estructura ($\text{MSS}$) en $5\text{M}$ en dirección al interior del rango + Divergencia de $RSI_{14}$ o cruce de la $EMA_{20}$ en $5\text{M}$.
+   * **Confirmación Intermercado:** El `DXY` y el rendimiento `US10Y` están girando en dirección **inversa** al trade en el oro.
+4. **Stop Loss y Take Profit:**
+   * **Stop Loss:** Extremo de la mecha del barrido más $\$1.50\text{ dólares}$ ($15\text{ pips}$) de margen de seguridad.
+   * **Take Profit 1:** El $50\%$ de equilibrio del rango barrido.
+   * **Take Profit 2:** El extremo opuesto del rango (Liquidez Externa opuesta), donde se toma el $80\%$ de la ganancia, dejando un $20\%$ (*runner*) si el oro está a favor de la tendencia de $4\text{H}$.
+
+---
+
+### 4.5. Playbook #4: Estrategia "Divergencia SMT Euro/DXY + Continuación Institucional" (`EUR/USD`)
+
+* **Horarios de Ejecución:**
+  * Killzone de Londres: $02:00\text{ – }05:00\text{ EST}$
+  * Transición Londres-NY: $07:30\text{ – }10:00\text{ EST}$
+* **Lógica Cuantitativa:** El `EUR/USD` se mueve con alta fidelidad técnica. Cuando combinamos un POI de $1\text{H}$/$4\text{H}$ con una **Divergencia SMT (*Smart Money Technique*)** frente al `DXY`, la tasa de acierto supera el $70\%$.
+
+#### Matemática de la Divergencia SMT (`EUR/USD` vs `DXY`):
+En condiciones normales, cada vez que el `DXY` marca un nuevo máximo ($H_{t} > H_{\text{previo}}$), el `EUR/USD` debe marcar simultáneamente un nuevo mínimo ($L_{t} < L_{\text{previo}}$).
+* **SMT Alcista para `EUR/USD` (Acumulación Institucional):**
+  $$\text{DXY hace un Alto Más Alto } (H_{\text{DXY}, t_2} > H_{\text{DXY}, t_1}) \quad \text{MIENTRAS QUE} \quad \text{EUR/USD hace un Bajo Más Alto } (L_{\text{EUR}, t_2} > L_{\text{EUR}, t_1})$$
+  *O viceversa:* El `EUR/USD` barre un mínimo clave ($L_{\text{EUR}, t_2} < L_{\text{EUR}, t_1}$), pero el `DXY` es incapaz de superar su máximo equivalente ($H_{\text{DXY}, t_2} < H_{\text{DXY}, t_1}$).
+* **SMT Bajista para `EUR/USD` (Distribución Institucional):**
+  $$\text{DXY hace un Bajo Más Bajo } (L_{\text{DXY}, t_2} < L_{\text{DXY}, t_1}) \quad \text{MIENTRAS QUE} \quad \text{EUR/USD hace un Alto Más Bajo } (H_{\text{EUR}, t_2} < H_{\text{EUR}, t_1})$$
+
+#### Reglas de Ejecución en $15\text{M}$ y $5\text{M}$:
+1. Detectar la divergencia SMT en $15\text{M}$ o $1\text{H}$ justo cuando el `EUR/USD` toca un Order Block o FVG de $1\text{H}$/$4\text{H}$ (o barre el máximo/mínimo de Asia o Londres).
+2. Esperar el $\text{MSS}$ en $5\text{M}$ con creación de FVG.
+3. Entrar en el retroceso al nivel $61.8\%\text{–}70.5\%$ de Fibonacci (OTE) del micro-impulso de $5\text{M}$ que coincide con el FVG.
+4. **Stop Loss:** $10\text{ a }15\text{ pips}$ (detrás del extremo estructural).
+5. **Take Profit:** $25\text{ a }45\text{ pips}$ en la siguiente piscina de liquidez de $1\text{H}$.
+
+---
+
+## CAPÍTULO 5: MATRIZ DE CORRELACIONES INTERMERCADO Y CATALIZADORES MACROECONÓMICOS
+
+Un agente de IA moderno no mira un gráfico de forma aislada; procesa en tiempo real una **matriz multivariable** para filtrar señales falsas y entender qué está impulsando el flujo de dinero global.
+
+---
+
+### 5.1. Matriz de Correlaciones Dinámicas para el Agente
+
+El coeficiente de correlación de Pearson ($r$) entre dos activos $X$ e $Y$ en una ventana móvil de $N$ periodos se define como:
+
+$$r_{X,Y} = \frac{\sum_{i=1}^{N} (X_i - \bar{X})(Y_i - \bar{Y})}{\sqrt{\sum_{i=1}^{N} (X_i - \bar{X})^2} \sqrt{\sum_{i=1}^{N} (Y_i - \bar{Y})^2}}$$
+
+Donde $r \in [-1, +1]$. La siguiente tabla muestra las relaciones estructurales que el agente debe verificar en gráficos de $15\text{M}$ y $1\text{H}$ antes de autorizar cualquier operación:
+
+| Activo a Operar | Variable de Control #1 | Correlación Normal | Variable de Control #2 | Correlación Normal | Variable de Control #3 (Par SMT) | Regla de Oro de Divergencia SMT |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`NAS100`** | Rendimiento Bono $10\text{Y}$ (`US10Y`) | **Inversa Fuerte** ($-0.75$ a $-0.90$) | Índice de Volatilidad (`VIX`) | **Inversa Muy Fuerte** ($-0.85$) | `US30` y `SPX500` (`ES`) | Si `US30` o `SPX500` hace un nuevo mínimo en soporte de $1\text{H}$, pero `NAS100` mantiene un mínimo más alto, `NAS100` liderará la subida con fuerza. |
+| **`US30`** | Índice de Volatilidad (`VIX`) | **Inversa Fuerte** ($-0.80$) | Índice Dólar (`DXY`) | **Inversa Moderada** ($-0.55$) | `NAS100` y `SPX500` | Si `NAS100` cae barriendo un mínimo, pero `US30` se niega a romper su propio mínimo, hay flujo institucional defensivo sosteniendo el Dow. |
+| **`XAU/USD`** | Tasas Reales / Bono `US10Y` | **Inversa Fuerte** ($-0.80$) | Índice Dólar (`DXY`) | **Inversa Fuerte** ($-0.75$ a $-0.85$) | Plata (`XAG/USD`) | **SMT de Metales Preciosos:** Si `XAU/USD` barre un mínimo de sesión pero la Plata (`XAG/USD`) NO rompe su mínimo (o viceversa), se confirma un giro institucional inminente en metales. |
+| **`EUR/USD`** | Índice Dólar (`DXY`) | **Inversa Casi Perfecta** ($-0.95$) | Diferencial `DE02Y - US02Y` | **Directa Fuerte** ($+0.85$) | Libra/Dólar (`GBP/USD`) | Si `GBP/USD` barre el mínimo de Londres/Asia pero `EUR/USD` hace un mínimo más alto (junto con fallo del `DXY` en superar su máximo), hay compra institucional de Euros. |
+
+> **Excepción de Régimen de Guerra / Pánico Geopolítico (Filtro Crítico para el Agente):**
+> Cuando ocurre un shock geopolítico repentino (ataques militares, crisis bancaria sistémica), se activa el modo **Risk-Off Extremo**: los inversores venden acciones (`US30` y `NAS100` se desploman) y compran simultáneamente **Dólares (`DXY` sube), Bonos del Tesoro (`US10Y` cae en rendimiento) y Oro (`XAU/USD` sube violentamente)**. El agente debe detectar cuando `DXY` y `XAU/USD` suben juntos con $r > +0.60$ y desactivar inmediatamente la regla de correlación inversa entre el Dólar y el Oro.
+
+---
+
+### 5.2. Protocolo ante Eventos Macroeconómicos de "Carpeta Roja" (High-Impact News)
+
+En cuentas fondeadas, operar a ciegas durante noticias macroeconómicas es la causa número uno de pérdida de cuentas por deslizamiento (*slippage*). El agente debe clasificar las noticias en tres niveles y saber exactamente cómo reacciona cada activo:
+
+| Evento Macroeconómico (EE. UU. / Eurozona) | Hora Habitual (EST) | Impacto en los 4 Activos | Comportamiento Algorítmico en los Primeros $15\text{ Minutos}$ |
+| :--- | :--- | :--- | :--- |
+| **IPC / CPI (Inflación EE. UU.)** | $08:30\text{ EST}$ (Mensual) | **MÁXIMO EN LOS 4** | Si el IPC sale **mayor a lo esperado** ($\text{Actual} > \text{Forecast}$): El mercado descuenta una Fed más agresiva (*Hawkish*). `DXY` y `US10Y` se disparan al alza; **`XAU/USD`, `EUR/USD`, `NAS100` y `US30` caen violentamente** en el primer minuto. Si sale **menor a lo esperado**: `DXY` se desploma y los 4 activos explotan al alza. |
+| **NFP (Nóminas No Agrícolas y Tasa de Desempleo)** | $08:30\text{ EST}$ (Primer viernes de cada mes) | **MÁXIMO EN LOS 4** | Suele producir un **latigazo en ambas direcciones (*Whipsaw*)** en los primeros $3$ minutos porque el algoritmo lee primero el dato titular de empleos creados y segundos después ajusta por la revisión del mes anterior y los ingresos por hora. **Prohibido operar antes de las $08:45\text{ EST}$.** |
+| **Decisión de Tasas del FOMC (Fed) y Rueda de Prensa de Powell** | $14:00\text{ EST}$ ( Comunicado) / $14:30\text{ EST}$ (Discurso) | **EXTREMO EN LOS 4** | El movimiento de las **$14:00\text{ EST}$** suele ser una trampa de liquidez. El verdadero movimiento direccional comienza a las **$14:35\text{–}14:45\text{ EST}$** durante la sesión de preguntas y respuestas del presidente de la Fed. |
+| **PCE Subyacente (Core PCE) y PIB (GDP)** | $08:30\text{ EST}$ | **ALTO** | Reacción más limpia y direccional que el NFP. Sirve como catalizador para completar los objetivos de liquidez de $1\text{H}$ y $4\text{H}$ antes de la apertura de las $09:30\text{ EST}$. |
+| **ISM Manufacturero / Servicios y JOLTS** | $10:00\text{ EST}$ | **ALTO** | Ocurre justo cuando termina la apertura de Wall Street ($09:30\text{–}10:00$). Es el combustible principal de la estrategia *Silver Bullet* de las $10:00\text{ AM}$. |
+| **Decisión de Tasas del BCE (Banco Central Europeo)** | $08:15\text{ EST}$ (Comunicado) / $08:45\text{ EST}$ (Lagarde) | **ALTO EN `EUR/USD`** | Genera barridos de liquidez en el `EUR/USD` justo antes de los datos de EE. UU. de las $08:30\text{ EST}$. |
+
+#### Regla de Ejecución Post-Noticia para Cuentas Fondeadas:
+1. **Ventana de Congelamiento (*Freeze Window*):** Desde $10\text{ minutos}$ antes de una noticia de Carpeta Roja hasta $10\text{–}15\text{ minutos}$ después, el agente **NO abre nuevas operaciones** y cancela cualquier orden *Limit/Stop* pendiente.
+2. **Operativa Post-Noticia ("La Segunda Onda"):** La vela de las $08:30\text{ a }08:45\text{ EST}$ suele barrer la liquidez en un extremo y dejar un enorme *Fair Value Gap* o cambio de estructura en $5\text{M}$. El agente espera a las $08:45\text{ EST}$, mide el retroceso al $50\%\text{–}61.8\%$ de la expansión de la noticia (cuando los spreads ya han vuelto a la normalidad y se cumple la regla de restricción de noticias de la Prop Firm) y entra a favor del flujo institucional real.
+
+---
+
+## CAPÍTULO 6: INGENIERÍA CUANTITATIVA Y GESTIÓN DE RIESGO PARA CUENTAS FONDEADAS (PROP FIRMS)
+
+El $90\%$ de los traders y bots que fallan en empresas de fondeo (FTMO, FundedNext, Maven, The5ers, Topstep, Apex, etc.) no fallan porque su estrategia no tenga ventaja estadística, sino porque **violan el límite de pérdida diaria (*Daily Drawdown*)** durante una racha normal de $3$ o $4$ pérdidas seguidas o por un mal cálculo del lotaje en índices y oro.
+
+---
+
+### 6.1. La Realidad Matemática del Drawdown en Cuentas Fondeadas
+
+En una cuenta tradicional de $\$100,000$, tienes $\$100,000$ de margen real. En una cuenta fondeada de $\$100,000$ con un **Drawdown Máximo Total del $10\%$** ($\$10,000$) y un **Drawdown Diario Máximo del $5\%$** ($\$5,000$), **tu capital real de riesgo diario es únicamente de $\$5,000$**.
+
+* Si arriesgas el $1\%$ nominal de la cuenta ($\$1,000$) por operación, en realidad estás arriesgando el **$20\%$ de tu margen de pérdida diaria permitida** en un solo tiro:
+  $$\text{Riesgo Real sobre Límite Diario} = \frac{\$1,000}{\$5,000} = 20\%$$
+* Con ese nivel de riesgo, $4$ pérdidas seguidas más el deslizamiento (*slippage*) y las comisiones te acercan peligrosamente a perder la cuenta en un solo día.
+
+#### Parámetros Matemáticos Óptimos para el Agente:
+* **Riesgo Base por Operación ($R_{\text{base}}$):** Entre **$0.25\%$ y $0.50\%$** del balance de la cuenta.
+* **Límite de Pérdida Diaria del Agente (*Hard Circuit Breaker*):** El agente se apaga automáticamente por el resto del día (hasta las $00:00\text{ CE(S)T}$ o $17:00\text{ EST}$ según el reinicio del servidor de la Prop Firm) si la pérdida acumulada del día (cerrada + flotante) alcanza el **$-1.50\%$**, o si acumula **$2$ operaciones perdedoras consecutivas** en el mismo día.
+* **Trampa del Drawdown Diario Basado en Equidad (*Equity-Based Daily Drawdown*):**
+  Muchas empresas de fondeo recalculan el límite de pérdida diaria a las $17:00\text{ EST}$ tomando el valor más alto entre el **Balance Cerrado** y la **Equidad Flotante**.
+  * *Ejemplo Mortal:* Tienes una cuenta de $\$100,000$. Dejas una operación abierta a las $17:00\text{ EST}$ con $+\$3,000$ de ganancia flotante (Equidad $= \$103,000$). Tu nuevo nivel de liquidación diaria para el día siguiente sube a $\$103,000 - \$5,000 = \$98,000$. Si durante la noche la operación se devuelve al punto de entrada (Equidad vuelve a $\$100,000$), ya has consumido $\$3,000$ ($3\%$) del límite diario del nuevo día sin haber perdido un solo dólar del balance inicial.
+  * **Regla Inquebrantable del Agente:** **Cerrar el $100\%$ de las operaciones intradía antes de las $16:45\text{ EST}$** para que al corte del servidor ($17:00\text{ EST}$) la Equidad sea exactamente igual al Balance.
+
+---
+
+### 6.2. Fórmulas Exactas de Cálculo de Lotaje por Activo (MT4 / MT5 / cTrader)
+
+Uno de los errores más graves al programar agentes multi-activo es que el tamaño de contrato (*Contract Size*) de `EUR/USD`, `XAU/USD`, `US30` y `NAS100` varía entre sí y a veces entre distintos brokers de fondeo.
+
+La ecuación universal que el agente debe ejecutar en tiempo real antes de enviar cada orden es:
+
+$$\text{Lotes} = \frac{\text{Capital} \times \text{Riesgo}_{\%}}{|\text{Precio}_{\text{Entrada}} - \text{Precio}_{\text{StopLoss}}| \times \text{Tamaño del Contrato por Lote}}$$
+
+En la API de MetaTrader 5 / MetaApi, esto se calcula dinámicamente consultando las propiedades del símbolo para evitar errores de configuración del broker:
+
+$$\text{Lotes} = \frac{\text{AccountBalance} \times \text{RiskFraction}}{\left(\frac{|\text{EntryPrice} - \text{StopLossPrice}|}{\text{SymbolTickSize}}\right) \times \text{SymbolTickValue}}$$
+
+#### Tabla de Referencia Estándar en Cuentas Fondeadas (Para una cuenta de $\$100,000$ arriesgando $0.50\% = \$500$):
+
+| Activo | Tamaño de Contrato Estándar (1.00 Lote) | Valor de $1$ Pip / $1$ Punto por $1.00$ Lote | Ejemplo de Stop Loss Intradía ($5\text{M}$–$15\text{M}$) | Cálculo del Lotaje Exacto para Arriesgar $\$500$ ($0.5\%$) |
+| :--- | :--- | :--- | :--- | :--- |
+| **`EUR/USD`** | $100,000\text{ unidades}$ | $\$10.00\text{ USD por pip}$ ($0.0001$) | $12.5\text{ pips}$ ($0.00125$) | $\text{Lotes} = \frac{500}{12.5 \times 10} = \mathbf{4.00\text{ Lotes}}$ |
+| **`XAU/USD`** | $100\text{ onzas troy}$ | $\$100.00\text{ USD por cada }\$1.00$ de cambio en el oro ($\$10\text{ por pip}$ de $\$0.10$) | $\$5.00\text{ dólares}$ ($50\text{ pips}$, ej. de $\$2,750.00$ a $\$2,745.00$) | $\text{Lotes} = \frac{500}{5.00 \times 100} = \mathbf{1.00\text{ Lote}}$ |
+| **`NAS100`** *(Contrato CFD Estándar 1x)* | $1\text{ índice}$ *(Nota: algunos brokers usan $10$ o $20$, verificar `TickValue`)* | $\$1.00\text{ USD por punto}$ (si tamaño de contrato $= 1$) | $40\text{ puntos}$ (ej. de $20,500$ a $20,460$) | Si $1\text{ Lote} = \$1/\text{pto}$: $\mathbf{12.50\text{ Lotes}}$ *(Si el broker usa contrato de $10\times$: $\mathbf{1.25\text{ Lotes}}$)* |
+| **`US30`** *(Contrato CFD Estándar 1x)* | $1\text{ índice}$ *(Algunos brokers usan $10\times$)* | $\$1.00\text{ USD por punto}$ (si tamaño de contrato $= 1$) | $80\text{ puntos}$ (ej. de $42,200$ a $42,120$) | Si $1\text{ Lote} = \$1/\text{pto}$: $\mathbf{6.25\text{ Lotes}}$ *(Si el broker usa contrato de $10\times$: $\mathbf{0.62\text{ Lotes}}$)* |
+
+---
+
+### 6.3. Máquina de Estados de Riesgo Dinámico (Anti-Quiebra para Evaluaciones y Fondeadas)
+
+Para garantizar que el agente supere las fases de evaluación y nunca pierda una cuenta fondeada real, su motor de riesgo debe ajustar dinámicamente el porcentaje de riesgo por operación según el estado actual de la cuenta:
+
+```
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │ ESTADO 1: NORMAL (Drawdown Acumulado entre 0% y -2.0%)               │
+   │  • Riesgo por Trade: 0.50%                                           │
+   │  • Filtro de Confluencia Mínimo: >= 80 / 100 puntos                  │
+   │  • Máximo de Operaciones al Día: 2 operaciones                       │
+   └──────────────────┬────────────────────────────────┬──────────────────┘
+                      │ Si cae por debajo de -2.0%     │ Si supera +4.0% de ganancia
+                      ▼                                ▼
+   ┌───────────────────────────────────┐  ┌───────────────────────────────────┐
+   │ ESTADO 2: DEFENSIVO / RECUPERACIÓN│  │ ESTADO 3: PROTECCIÓN DE GANANCIAS │
+   │  (Drawdown entre -2.0% y -4.0%)   │  │  (Cuenta en +4.0% o cerca de meta)│
+   │  • Riesgo reducido a: 0.25%       │  │  • Riesgo ajustado a: 0.30%       │
+   │  • Filtro Confluencia: >= 85 pts  │  │  • Toma de parciales rápida (1:1.5)│
+   │  • Máximo 1 trade al día          │  │  • Asegura el cobro (Payout) o    │
+   └──────────────────┬────────────────┘  │    pase de fase sin arriesgar lo  │
+                      │ Si cae a -4.5%    │    ganado.                        │
+                      ▼                   └───────────────────────────────────┘
+   ┌───────────────────────────────────┐
+   │ ESTADO 4: EMERGENCIA (<-4.5%)     │
+   │  • Riesgo Ultra-Bajo: 0.15%       │
+   │  • Solo setups A+ (>= 90 pts)     │
+   │  • Solo opera EUR/USD o NAS100    │
+   │    fuera de los primeros 15 min   │
+   │    de apertura NY.                │
+   └───────────────────────────────────┘
+```
+
+#### Esperanza Matemática ($E$) y Rentabilidad del Agente:
+La esperanza matemática por cada dólar arriesgado se rige por la ecuación:
+
+$$E = (P_{\text{win}} \times \overline{RR}) - (1 - P_{\text{win}})$$
+
+Donde $P_{\text{win}}$ es la tasa de acierto (*Win Rate*) y $\overline{RR}$ es el ratio Riesgo:Beneficio promedio obtenido.
+* Con una estrategia multitemporal ($4\text{H}/1\text{H} \rightarrow 15\text{M}/5\text{M}$) que exige un ratio mínimo de $\overline{RR} = 2.5$, tu agente solo necesita un $P_{\text{win}} > 28.6\%$ para no perder dinero.
+* Al filtrar las entradas únicamente dentro de las **Killzones**, tras un **barrido de liquidez en POI de $1\text{H}$/$4\text{H}$** y con **correlación intermercado (`DXY` / `US10Y`) a favor**, la tasa de acierto histórica de estos setups se sitúa entre el **$48\%$ y el $58\%$**, generando una esperanza matemática altamente positiva:
+  $$E = (0.52 \times 2.5) - (0.48 \times 1.0) = +0.82R\text{ de beneficio neto esperado por operación}$$
+
+---
+
+## CAPÍTULO 7: MATRIZ RESUMEN DE REGLAS DE DECISIÓN PARA EL PROMPT / MOTOR DEL AGENTE
+
+Esta tabla sintetiza todas las condiciones lógicas (*Boolean & Quantitative Checks*) que el agente debe verificar antes de emitir una orden `BUY` o `SELL` en cualquiera de los 4 activos:
+
+| Dimensión de Análisis | Peso en el Score ($100\text{ pts}$) | Condición Obligatoria para `US30` y `NAS100` | Condición Obligatoria para `XAU/USD` (Oro) | Condición Obligatoria para `EUR/USD` |
+| :--- | :---: | :--- | :--- | :--- |
+| **1. Filtro Horario (Killzone)** | $20\text{ pts}$ | Entre $09:30\text{–}11:30\text{ EST}$ o $13:30\text{–}15:45\text{ EST}$. Prohibido en Asia y $16:00\text{–}18:00\text{ EST}$. | Entre $02:00\text{–}05:00\text{ EST}$ (Londres) o $08:20\text{–}11:00\text{ EST}$ (COMEX/NY). | Entre $02:00\text{–}05:00\text{ EST}$ (Londres) o $07:30\text{–}10:30\text{ EST}$ (NY). |
+| **2. Estructura y Zona $4\text{H}$ / $1\text{H}$** | $25\text{ pts}$ | Alineado con el flujo de órdenes de $1\text{H}$/$4\text{H}$. Compras en zona *Discount* ($<50\%$) o tras tocar FVG/OB de $1\text{H}$; ventas en *Premium* ($>50\%$). | Reacción en FVG/OB de $1\text{H}$/$4\text{H}$ o nivel psicológico de $\$50/\$100$, con objetivo hacia `PDH`/`PDL` o extremo de sesión. | Respeto de estructura $4\text{H}$/$1\text{H}$ y ubicación en zona OTE ($61.8\%\text{–}78.6\%$) o FVG/OB de $1\text{H}$. |
+| **3. Barrido de Liquidez ($30\text{M}$ / $15\text{M}$)** | $20\text{ pts}$ | Barrido previo del máximo/mínimo pre-mercado ($08:00\text{–}09:29\text{ EST}$), extremo de Londres o `PDH`/`PDL` con mecha de rechazo en $15\text{M}$. | Barrido falso (*Stop Hunt*) del máximo/mínimo de Asia o Londres con cierre de vela de $15\text{M}$/ $30\text{M}$ de nuevo dentro del rango. | Barrido de extremo de Asia/Londres o de dobles techos/suelos ($EQH$/$EQL$) en $15\text{M}$/$1\text{H}$. |
+| **4. Confluencia Intermercado** | $15\text{ pts}$ | `US10Y` y `VIX` cayendo para compras (o subiendo para ventas). Bono adicional (+$5\text{ pts}$) si hay divergencia SMT entre `NAS100` y `US30`. | `DXY` y `US10Y` moviéndose en dirección inversa (salvo alerta de guerra). Bono si hay divergencia SMT con la Plata (`XAG/USD`). | Divergencia SMT confirmada con `DXY` o `GBP/USD` y diferencial de bonos a favor. |
+| **5. Gatillo Técnico en $5\text{M}$** | $20\text{ pts}$ | Ruptura de estructura ($\text{MSS}$) en $5\text{M}$ con vela de desplazamiento ($>1.2\times ATR$), creación de FVG en $5\text{M}$ y precio del lado correcto del VWAP. | $\text{MSS}$ en $5\text{M}$ tras el barrido + FVG limpio + espacio libre hasta el siguiente obstáculo para lograr al menos $R:R \ge 1:2.5$. | $\text{MSS}$ en $5\text{M}$ + retroceso al FVG o nivel OTE de $5\text{M}$ + spread actual menor a $0.8\text{ pips}$. |
