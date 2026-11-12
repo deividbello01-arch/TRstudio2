@@ -21,6 +21,7 @@ import {
   BookOpen,
   LineChart,
   X,
+  Trophy,
 } from 'lucide-react';
 import { TradeSetup, KillzoneSession, CustomDocument, AppLanguage, InstrumentMarketMode, MT5SessionState } from '../types/trading';
 import { getEnabledTradeableInstruments, FUTURES_CONTRACT_MAP } from '../lib/instruments';
@@ -112,6 +113,7 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
   const [includeNews, setIncludeNews] = useState<boolean>(true);
   const [userNotes, setUserNotes] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isScanningBest, setIsScanningBest] = useState<boolean>(false);
   const [tradeSetup, setTradeSetup] = useState<TradeSetup | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
@@ -212,15 +214,76 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
     }
   };
 
+  // Scan all enabled indices and load the #1 highest win-probability & confluence setup
+  const handleFindBestSetupAcrossIndices = async () => {
+    setIsScanningBest(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/scan-best-setups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountBalance: Number(accountBalance) || 10000,
+          riskPercentage: Number(riskPercentage) || 0.50,
+          includeNews,
+          strategyId: selectedStrategyId,
+          preferredDirection,
+          marketMode,
+          enabledSymbols,
+          language,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(
+          isEn
+            ? 'Failed to scan indices for #1 best entry'
+            : 'Fallo al escanear índices para la #1 Mejor Entrada'
+        );
+      }
+      const data = await res.json();
+      const best: TradeSetup | null = data.bestSetup || (data.rankedSetups && data.rankedSetups[0]) || null;
+      if (best) {
+        setSelectedAsset(best.asset);
+        setTradeSetup(best);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(
+        err.message ||
+          (isEn ? 'Error scanning best entry.' : 'Error al buscar la mejor entrada.')
+      );
+    } finally {
+      setIsScanningBest(false);
+    }
+  };
+
   // Helper to evaluate color and recommendation tier dynamically on the client
   const getSetupMetrics = (setup: TradeSetup) => {
-    const score = setup.totalConfluenceScore ?? 50;
-    const winProb = setup.winProbability ?? Math.min(89, Math.max(32, Math.round(score * 0.92)));
+    const bd = setup.confluenceBreakdown;
+    const sumFromPillars = bd
+      ? Math.min(
+          100,
+          Math.max(
+            20,
+            Math.round(
+              (Number(bd.killzoneFilterScore) || 0) +
+                (Number(bd.structureScore) || 0) +
+                (Number(bd.liquiditySweepScore) || 0) +
+                (Number(bd.intermarketScore) || 0) +
+                (Number(bd.triggerScore) || 0)
+            )
+          )
+        )
+      : null;
+
+    const score = sumFromPillars ?? setup.totalConfluenceScore ?? 50;
+    const winProb =
+      setup.winProbability ?? Math.min(93, Math.max(36, Math.round(score * 0.94)));
 
     let verdict: 'TAKE' | 'CAUTION' | 'AVOID' = setup.recommendationVerdict || 'TAKE';
     if (!setup.recommendationVerdict) {
-      if (score >= 75 && winProb >= 70) verdict = 'TAKE';
-      else if (score >= 56) verdict = 'CAUTION';
+      if (score >= 72 && winProb >= 68) verdict = 'TAKE';
+      else if (score >= 55 && winProb >= 55) verdict = 'CAUTION';
       else verdict = 'AVOID';
     }
 
@@ -259,8 +322,8 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
 
     const defaultReason = isHigh
       ? isEn
-        ? `High win probability (${winProb}%). Structure, session liquidity, and intermarket flow are aligned.`
-        : `Alta probabilidad de acierto (${winProb}%). La estructura, liquidez de sesión y flujo intermercado están alineados.`
+        ? `High win probability (${winProb}%). Structure, session liquidity, and intermarket flow are aligned (${score}/100 pts).`
+        : `Alta probabilidad de acierto (${winProb}%). La estructura, liquidez de sesión y flujo intermercado están alineados (${score}/100 pts).`
       : isMed
       ? isEn
         ? `Moderate win probability (${winProb}%). Wait for a clear 5M/15M candle confirmation or reduce lot size by 50%.`
@@ -711,27 +774,56 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleRequestTradeSetup}
-              disabled={isLoading}
-              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider font-mono flex items-center justify-center gap-2 shadow-lg transition disabled:opacity-50"
-            >
-              {isLoading ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <Sparkles className="w-4 h-4" />
-              )}
-              <span>
-                {isLoading
-                  ? isEn
-                    ? 'Calculating...'
-                    : 'Calculando...'
-                  : isEn
-                  ? 'Get Trade Entry'
-                  : 'Sacar Entrada'}
-              </span>
-            </button>
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={handleRequestTradeSetup}
+                disabled={isLoading || isScanningBest}
+                className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider font-mono flex items-center justify-center gap-2 shadow-lg transition disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {isLoading
+                    ? isEn
+                      ? 'Calculating...'
+                      : 'Calculando...'
+                    : isEn
+                    ? `Calculate ${selectedAsset}`
+                    : `Sacar Entrada (${selectedAsset})`}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleFindBestSetupAcrossIndices}
+                disabled={isLoading || isScanningBest}
+                title={
+                  isEn
+                    ? 'Scan all enabled indices and load the #1 highest win-probability & confluence setup'
+                    : 'Escanea todos los índices habilitados y carga la #1 Mejor Entrada con mayor % de acierto y confluencia'
+                }
+                className="w-full py-1.5 px-3 rounded-xl bg-emerald-950/90 hover:bg-emerald-800 text-emerald-300 hover:text-white border border-emerald-600/60 font-bold text-[11px] uppercase tracking-wider font-mono flex items-center justify-center gap-1.5 shadow transition disabled:opacity-50"
+              >
+                {isScanningBest ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                )}
+                <span>
+                  {isScanningBest
+                    ? isEn
+                      ? 'Scanning #1...'
+                      : 'Buscando #1...'
+                    : isEn
+                    ? '#1 Best Entry Across All'
+                    : '🏆 Buscar #1 Mejor Entrada'}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1034,49 +1126,65 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
 
             {/* 5-Factor Confluence Breakdown Mini Meters */}
             {tradeSetup.confluenceBreakdown && (
-              <div className="grid grid-cols-5 gap-2 shrink-0 bg-[#120c08] p-2.5 rounded-xl border border-[#3b271a] font-mono text-[10px]">
-                {[
-                  {
-                    label: isEn ? 'Session' : 'Horario',
-                    val: tradeSetup.confluenceBreakdown.killzoneFilterScore,
-                    max: 20,
-                  },
-                  {
-                    label: isEn ? 'Structure' : 'Estructura',
-                    val: tradeSetup.confluenceBreakdown.structureScore,
-                    max: 25,
-                  },
-                  {
-                    label: isEn ? 'Liquidity' : 'Liquidez',
-                    val: tradeSetup.confluenceBreakdown.liquiditySweepScore,
-                    max: 20,
-                  },
-                  {
-                    label: 'Macro',
-                    val: tradeSetup.confluenceBreakdown.intermarketScore,
-                    max: 20,
-                  },
-                  {
-                    label: isEn ? 'Trigger' : 'Gatillo',
-                    val: tradeSetup.confluenceBreakdown.triggerScore,
-                    max: 15,
-                  },
-                ].map((item, i) => {
-                  const pct = Math.min(100, Math.round((item.val / item.max) * 100));
-                  const itemColor =
-                    pct >= 75 ? 'bg-emerald-500' : pct >= 55 ? 'bg-yellow-500' : 'bg-rose-500';
-                  return (
-                    <div key={i} className="text-center min-w-[54px]">
-                      <div className="text-amber-200/60 truncate">{item.label}</div>
-                      <div className="font-bold text-white mt-0.5">
-                        {item.val}/{item.max}
+              <div className="shrink-0 bg-[#120c08] p-2.5 rounded-xl border border-[#3b271a] font-mono text-[10px] space-y-1.5">
+                <div className="flex items-center justify-between gap-3 text-[9px] text-amber-200/75 border-b border-[#2b1c12] pb-1">
+                  <span className="uppercase font-bold text-amber-300">
+                    {isEn ? '5-Pillar Confluence Sum:' : 'Suma Exacta 5 Pilares:'}
+                  </span>
+                  <span>
+                    {tradeSetup.confluenceBreakdown.killzoneFilterScore} +{' '}
+                    {tradeSetup.confluenceBreakdown.structureScore} +{' '}
+                    {tradeSetup.confluenceBreakdown.liquiditySweepScore} +{' '}
+                    {tradeSetup.confluenceBreakdown.intermarketScore} +{' '}
+                    {tradeSetup.confluenceBreakdown.triggerScore} ={' '}
+                    <strong className="text-white">{metrics.score}/100 pts</strong> →{' '}
+                    <strong className={metrics.textColorClass}>{metrics.winProb}%</strong>
+                  </span>
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                  {[
+                    {
+                      label: isEn ? 'Session' : 'Horario',
+                      val: tradeSetup.confluenceBreakdown.killzoneFilterScore,
+                      max: 20,
+                    },
+                    {
+                      label: isEn ? 'Structure' : 'Estructura',
+                      val: tradeSetup.confluenceBreakdown.structureScore,
+                      max: 25,
+                    },
+                    {
+                      label: isEn ? 'Liquidity' : 'Liquidez',
+                      val: tradeSetup.confluenceBreakdown.liquiditySweepScore,
+                      max: 20,
+                    },
+                    {
+                      label: 'Macro',
+                      val: tradeSetup.confluenceBreakdown.intermarketScore,
+                      max: 20,
+                    },
+                    {
+                      label: isEn ? 'Trigger' : 'Gatillo',
+                      val: tradeSetup.confluenceBreakdown.triggerScore,
+                      max: 15,
+                    },
+                  ].map((item, i) => {
+                    const pct = Math.min(100, Math.round((item.val / item.max) * 100));
+                    const itemColor =
+                      pct >= 75 ? 'bg-emerald-500' : pct >= 55 ? 'bg-yellow-500' : 'bg-rose-500';
+                    return (
+                      <div key={i} className="text-center min-w-[54px]">
+                        <div className="text-amber-200/60 truncate">{item.label}</div>
+                        <div className="font-bold text-white mt-0.5">
+                          {item.val}/{item.max}
+                        </div>
+                        <div className="w-full h-1 bg-[#24170f] rounded-full mt-1 overflow-hidden">
+                          <div className={`h-full ${itemColor}`} style={{ width: `${pct}%` }} />
+                        </div>
                       </div>
-                      <div className="w-full h-1 bg-[#24170f] rounded-full mt-1 overflow-hidden">
-                        <div className={`h-full ${itemColor}`} style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

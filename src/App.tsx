@@ -301,6 +301,11 @@ export default function App() {
       ? activeDocs[0].name
       : `${activeDocs.length} Bases Activas`;
 
+  const activeAccountBalance =
+    mt5State?.connected && mt5State.balance > 0
+      ? mt5State.balance
+      : settings.defaultBalance;
+
   return (
     <div
       data-theme={settings.theme}
@@ -338,7 +343,7 @@ export default function App() {
 
         {activeTab === 'scanner' && (
           <MultiIndexScanner
-            defaultBalance={settings.defaultBalance}
+            defaultBalance={activeAccountBalance}
             defaultRisk={settings.defaultRisk}
             language={settings.language}
             marketMode={settings.instrumentMarketMode}
@@ -369,7 +374,7 @@ export default function App() {
               setTargetAssetForAction(symbol);
               setActiveTab('terminal');
             }}
-            defaultBalance={settings.defaultBalance}
+            defaultBalance={activeAccountBalance}
             defaultRisk={settings.defaultRisk}
             language={settings.language}
             marketMode={settings.instrumentMarketMode}
@@ -385,7 +390,12 @@ export default function App() {
             mt5State={mt5State}
             onRefreshMt5={refreshMt5Status}
             language={settings.language}
-            defaultBalance={settings.defaultBalance}
+            defaultBalance={activeAccountBalance}
+            defaultRisk={settings.defaultRisk}
+            instruments={instruments}
+            fxRates={fxRates}
+            marketMode={settings.instrumentMarketMode}
+            enabledSymbols={settings.enabledSymbols}
             onNavigateToEntries={() => setActiveTab('entries')}
             onNavigateToScanner={() => setActiveTab('scanner')}
           />
@@ -438,7 +448,7 @@ export default function App() {
         {activeTab === 'calculator' && (
           <PropFirmCalculator
             language={settings.language}
-            defaultBalance={settings.defaultBalance}
+            defaultBalance={activeAccountBalance}
             defaultRisk={settings.defaultRisk}
             fxRates={fxRates}
             marketMode={settings.instrumentMarketMode}

@@ -264,6 +264,13 @@ export interface MT5SessionState {
   brokerPreset: MT5BrokerPreset;
   accountType: 'Prop Firm' | 'Live ECN' | 'Demo Quant';
   connectionMode: MT5ConnectionMode;
+  accountName?: string;
+  currency?: string;
+  leverage?: string;
+  margin?: number;
+  freeMargin?: number;
+  marginLevelPct?: number;
+  syncSource?: 'EA_LIVE' | 'METAAPI_CLOUD' | 'BROKER_SESSION';
   metaApiConnected?: boolean;
   eaLastSeenAt?: string | null;
   eaPendingCount?: number;

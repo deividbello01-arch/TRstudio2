@@ -5,10 +5,10 @@
 //+------------------------------------------------------------------+
 #property copyright "TRstudio Institutional Quantitative Suite"
 #property link      "http://localhost:3000"
-#property version   "2.50"
-#property description "Puente Oficial de Auto-Ejecución en 1 Clic entre TRstudio Web y MetaTrader 5 Desktop."
-#property description "Recibe el Índice/Activo mapeado al broker, Lotaje Exacto, Entrada, Stop Loss y Take Profits."
-#property description "IMPORTANTE: En MT5 ve a Herramientas -> Opciones -> Asesores Expertos -> Activa 'Permitir WebRequest' y añade: http://localhost:3000"
+#property version   "3.00"
+#property description "Sincronización bidireccional en tiempo real entre MetaTrader 5 y TRstudio Web."
+#property description "Envía automáticamente Balance, Equidad, Margen Libre, Login y Servidor desde tu cuenta MT5."
+#property description "Ejecuta órdenes Market/Limit, cierres parciales, Break Even y cierre total desde la web."
 
 #include <Trade\Trade.mqh>
 
@@ -17,7 +17,7 @@ input string   InpServerUrl      = "http://localhost:3000"; // URL del Servidor 
 input int      InpPollSeconds    = 1;                       // Intervalo de sincronización (segundos)
 input ulong    InpMagicNumber    = 889900;                  // Magic Number institucional TRstudio
 input ulong    InpSlippagePoints = 20;                      // Deslizamiento máximo permitido (puntos)
-input bool     InpUseTP2AsMainTP = false;                   // false = Usar TP1 (1:1.8) | true = Usar TP2 (1:3.0)
+input bool     InpUseTP2AsMainTP = false;                   // false = Usar TP1 | true = Usar TP2
 
 CTrade trade;
 
@@ -32,10 +32,11 @@ int OnInit()
    trade.SetAsyncMode(false);
 
    EventSetTimer(MathMax(1, InpPollSeconds));
+   SyncAccountTelemetryWithWeb();
    Print("=================================================================");
-   Print("🚀 TRstudio_MT5_AutoExecutor INICIADO CORRECTAMENTE");
-   Print("🔗 Conectado a cola de órdenes: ", InpServerUrl, "/api/mt5/ea-queue");
-   Print("💡 Asegúrate de añadir ", InpServerUrl, " en Herramientas -> Opciones -> Asesores Expertos -> Permitir WebRequest");
+   Print("TRstudio_MT5_AutoExecutor v3.0 INICIADO");
+   Print("Cuenta MT5 detectada: #", AccountInfoInteger(ACCOUNT_LOGIN), " | Balance: ", AccountInfoDouble(ACCOUNT_BALANCE), " ", AccountInfoString(ACCOUNT_CURRENCY));
+   Print("Asegúrate de añadir ", InpServerUrl, " en Herramientas -> Opciones -> Asesores Expertos -> Permitir WebRequest");
    Print("=================================================================");
    return(INIT_SUCCEEDED);
   }
@@ -46,7 +47,36 @@ int OnInit()
 void OnDeinit(const int reason)
   {
    EventKillTimer();
-   Print("TRstudio_MT5_AutoExecutor finalizado.");
+  }
+
+//+------------------------------------------------------------------+
+//| Sincroniza Balance, Equidad, Margen y Cuenta hacia TRstudio Web  |
+//+------------------------------------------------------------------+
+void SyncAccountTelemetryWithWeb()
+  {
+   string syncUrl = InpServerUrl + "/api/mt5/ea-sync";
+   long   loginId = AccountInfoInteger(ACCOUNT_LOGIN);
+   long   lev     = AccountInfoInteger(ACCOUNT_LEVERAGE);
+   double bal     = AccountInfoDouble(ACCOUNT_BALANCE);
+   double eq      = AccountInfoDouble(ACCOUNT_EQUITY);
+   double mar     = AccountInfoDouble(ACCOUNT_MARGIN);
+   double freeMar = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   double fltPnl  = AccountInfoDouble(ACCOUNT_PROFIT);
+   string srv     = AccountInfoString(ACCOUNT_SERVER);
+   string name    = AccountInfoString(ACCOUNT_NAME);
+   string ccy     = AccountInfoString(ACCOUNT_CURRENCY);
+
+   string body = StringFormat(
+      "{\"login\":\"%I64d\",\"brokerServer\":\"%s\",\"accountName\":\"%s\",\"currency\":\"%s\",\"leverage\":\"1:%I64d\",\"balance\":%.2f,\"equity\":%.2f,\"margin\":%.2f,\"freeMargin\":%.2f,\"floatingPnlUsd\":%.2f}",
+      loginId, srv, name, ccy, lev, bal, eq, mar, freeMar, fltPnl
+   );
+
+   char post[];
+   StringToCharArray(body, post, 0, StringLen(body), CP_UTF8);
+   char res[];
+   string resHeaders;
+   string headers = "Content-Type: application/json\r\n";
+   WebRequest("POST", syncUrl, headers, 1500, post, res, resHeaders);
   }
 
 //+------------------------------------------------------------------+
@@ -91,31 +121,30 @@ double NormalizeLotsForSymbol(const string sym, double rawLots)
   }
 
 //+------------------------------------------------------------------+
-//| Timer function: Consulta la cola de órdenes de TRstudio          |
+//| Timer function: Sincroniza Cuenta y Consulta Cola de Órdenes     |
 //+------------------------------------------------------------------+
 void OnTimer()
   {
+   // 1) Enviar Balance y Equidad reales de la cuenta MT5 a la web
+   SyncAccountTelemetryWithWeb();
+
+   // 2) Consultar órdenes pendientes desde la web
    string url = InpServerUrl + "/api/mt5/ea-queue";
    char   postData[];
    char   result[];
    string resultHeaders;
 
    ResetLastError();
-   int res = WebRequest("GET", url, "", 2500, postData, result, resultHeaders);
-   if(res != 200)
-     {
-      if(GetLastError() == 4014)
-        {
-         Print("⚠️ ERROR 4014: Habilita WebRequest hacia ", InpServerUrl, " en Herramientas -> Opciones -> Asesores Expertos");
-        }
-      return;
-     }
+   int res = WebRequest("GET", url, "", 2000, postData, result, resultHeaders);
+   if(res != 200) return;
 
    string payload = CharArrayToString(result, 0, WHOLE_ARRAY, CP_UTF8);
    if(StringFind(payload, "\"hasPending\":true") < 0)
       return;
 
    string orderId      = ExtractJsonString(payload, "id");
+   string cmdType      = ExtractJsonString(payload, "cmdType");
+   string targetTicket = ExtractJsonString(payload, "ticket");
    string brokerSymbol = ExtractJsonString(payload, "brokerSymbol");
    string asset        = ExtractJsonString(payload, "asset");
    string action       = ExtractJsonString(payload, "action");
@@ -128,67 +157,93 @@ void OnTimer()
 
    if(orderId == "") return;
 
-   // Seleccionar símbolo en MarketWatch del Broker
-   string sym = brokerSymbol;
-   if(!SymbolSelect(sym, true))
-     {
-      if(SymbolSelect(asset, true))
-         sym = asset;
-      else
-         sym = _Symbol;
-     }
-
-   int digits = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
-   double normLots = NormalizeLotsForSymbol(sym, lots);
-   double targetTp = InpUseTP2AsMainTP && tp2 > 0 ? tp2 : tp1;
-   double normSL   = stopLoss > 0 ? NormalizeDouble(stopLoss, digits) : 0.0;
-   double normTP   = targetTp > 0 ? NormalizeDouble(targetTp, digits) : 0.0;
-   double normEntry= entryPrice > 0 ? NormalizeDouble(entryPrice, digits) : 0.0;
-
    bool executed = false;
-   string comment = "TRstudio_" + asset + "_" + orderId;
+   ulong mt5Ticket = 0;
 
-   if(orderType == "LIMIT" && normEntry > 0)
+   // Comando de cierre total o individual desde la web
+   if(cmdType == "CLOSE_ALL")
      {
-      if(action == "BUY")
-         executed = trade.BuyLimit(normLots, normEntry, sym, normSL, normTP, ORDER_TIME_GTC, 0, comment);
-      else
-         executed = trade.SellLimit(normLots, normEntry, sym, normSL, normTP, ORDER_TIME_GTC, 0, comment);
+      for(int i = PositionsTotal() - 1; i >= 0; i--)
+        {
+         ulong t = PositionGetTicket(i);
+         if(t > 0) trade.PositionClose(t);
+        }
+      executed = true;
+     }
+   else if(cmdType == "CLOSE_TICKET")
+     {
+      ulong t = (ulong)StringToInteger(targetTicket);
+      if(t > 0) executed = trade.PositionClose(t);
+     }
+   else if(cmdType == "MODIFY_SL_TP")
+     {
+      ulong t = (ulong)StringToInteger(targetTicket);
+      if(t > 0 && PositionSelectByTicket(t))
+        {
+         string posSym = PositionGetString(POSITION_SYMBOL);
+         int d = (int)SymbolInfoInteger(posSym, SYMBOL_DIGITS);
+         double newSl = stopLoss > 0 ? NormalizeDouble(stopLoss, d) : PositionGetDouble(POSITION_SL);
+         double newTp = tp1 > 0 ? NormalizeDouble(tp1, d) : PositionGetDouble(POSITION_TP);
+         executed = trade.PositionModify(t, newSl, newTp);
+        }
      }
    else
      {
-      double ask = SymbolInfoDouble(sym, SYMBOL_ASK);
-      double bid = SymbolInfoDouble(sym, SYMBOL_BID);
-      if(action == "BUY")
-         executed = trade.Buy(normLots, sym, ask, normSL, normTP, comment);
+      // Nueva orden Market o Limit
+      string sym = brokerSymbol;
+      if(!SymbolSelect(sym, true))
+        {
+         if(SymbolSelect(asset, true))
+            sym = asset;
+         else
+            sym = _Symbol;
+        }
+
+      int digits = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+      double normLots = NormalizeLotsForSymbol(sym, lots);
+      double targetTp = InpUseTP2AsMainTP && tp2 > 0 ? tp2 : tp1;
+      double normSL   = stopLoss > 0 ? NormalizeDouble(stopLoss, digits) : 0.0;
+      double normTP   = targetTp > 0 ? NormalizeDouble(targetTp, digits) : 0.0;
+      double normEntry= entryPrice > 0 ? NormalizeDouble(entryPrice, digits) : 0.0;
+      string comment  = "TRstudio_" + asset + "_" + orderId;
+
+      if(orderType == "LIMIT" && normEntry > 0)
+        {
+         if(action == "BUY")
+            executed = trade.BuyLimit(normLots, normEntry, sym, normSL, normTP, ORDER_TIME_GTC, 0, comment);
+         else
+            executed = trade.SellLimit(normLots, normEntry, sym, normSL, normTP, ORDER_TIME_GTC, 0, comment);
+        }
       else
-         executed = trade.Sell(normLots, sym, bid, normSL, normTP, comment);
+        {
+         double ask = SymbolInfoDouble(sym, SYMBOL_ASK);
+         double bid = SymbolInfoDouble(sym, SYMBOL_BID);
+         if(action == "BUY")
+            executed = trade.Buy(normLots, sym, ask, normSL, normTP, comment);
+         else
+            executed = trade.Sell(normLots, sym, bid, normSL, normTP, comment);
+        }
+
+      mt5Ticket = trade.ResultOrder();
      }
 
-   ulong mt5Ticket = trade.ResultOrder();
-   uint  retcode   = trade.ResultRetcode();
+   uint retcode = trade.ResultRetcode();
 
    // Confirmar ejecución al servidor TRstudio
    string ackUrl = InpServerUrl + "/api/mt5/ea-ack";
    string ackBody = StringFormat(
-      "{\"id\":\"%s\",\"executed\":%s,\"mt5Ticket\":\"%I64u\",\"retcode\":%u,\"symbol\":\"%s\",\"lots\":%.2f}",
+      "{\"id\":\"%s\",\"executed\":%s,\"mt5Ticket\":\"%I64u\",\"retcode\":%u}",
       orderId,
       executed ? "true" : "false",
       mt5Ticket,
-      retcode,
-      sym,
-      normLots
+      retcode
    );
 
    char ackPost[];
    StringToCharArray(ackBody, ackPost, 0, StringLen(ackBody), CP_UTF8);
    char ackRes[];
    string ackHeaders = "Content-Type: application/json\r\n";
-   WebRequest("POST", ackUrl, ackHeaders, 2500, ackPost, ackRes, resultHeaders);
-
-   if(executed)
-      PrintFormat("✅ Orden TRstudio #%s ejecutada en MT5: %s %s %.2f Lotes (Ticket #%I64u)", orderId, action, sym, normLots, mt5Ticket);
-   else
-      PrintFormat("❌ Error al ejecutar orden #%s en MT5 (%s). Retcode=%u", orderId, sym, retcode);
+   WebRequest("POST", ackUrl, ackHeaders, 2000, ackPost, ackRes, resultHeaders);
+   SyncAccountTelemetryWithWeb();
   }
 //+------------------------------------------------------------------+

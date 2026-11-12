@@ -110,8 +110,11 @@ export const MultiIndexScanner: React.FC<MultiIndexScannerProps> = ({
   };
 
   useEffect(() => {
-    runScanner();
-  }, [language, includeNews, marketMode, enabledSymbols]);
+    const timer = setTimeout(() => {
+      runScanner();
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [language, includeNews, marketMode, enabledSymbols, accountBalance, riskPercentage]);
 
   const isFuturesMode = marketMode === 'futures_only';
   const unitWord = isFuturesMode
@@ -122,6 +125,86 @@ export const MultiIndexScanner: React.FC<MultiIndexScannerProps> = ({
     ? 'Lots'
     : 'Lotes';
   const unitShort = isFuturesMode ? 'C' : 'L';
+
+  const renderConfluencePillars = (setup: TradeSetup) => {
+    if (!setup.confluenceBreakdown) return null;
+    const b = setup.confluenceBreakdown;
+    const pillars = [
+      {
+        label: isEn ? '1. Session / Killzone' : '1. Horario / Sesión',
+        val: b.killzoneFilterScore,
+        max: 20,
+      },
+      {
+        label: isEn ? '2. 4H/1H Structure' : '2. Estructura 4H/1H',
+        val: b.structureScore,
+        max: 25,
+      },
+      {
+        label: isEn ? '3. Liquidity / FVG' : '3. Liquidez / FVG 50%',
+        val: b.liquiditySweepScore,
+        max: 20,
+      },
+      {
+        label: isEn ? '4. Macro / DXY / 10Y' : '4. Flujo Macro / DXY',
+        val: b.intermarketScore,
+        max: 20,
+      },
+      {
+        label: isEn ? '5. 15M/5M Trigger' : '5. Gatillo 15M/5M + R:R',
+        val: b.triggerScore,
+        max: 15,
+      },
+    ];
+    const sumPts =
+      b.killzoneFilterScore +
+      b.structureScore +
+      b.liquiditySweepScore +
+      b.intermarketScore +
+      b.triggerScore;
+
+    return (
+      <div className="p-3 rounded-xl bg-[#120c08] border border-[#3b271a] space-y-2 font-mono text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+          <span className="font-bold text-white uppercase">
+            {isEn
+              ? 'Exact 5-Pillar Confluence & Win-Rate Verification:'
+              : 'Desglose Exacto de Confluencia (5 Pilares = 100 pts) y % de Acierto:'}
+          </span>
+          <span className="text-amber-300 font-bold tabular-nums">
+            {b.killzoneFilterScore} + {b.structureScore} + {b.liquiditySweepScore} +{' '}
+            {b.intermarketScore} + {b.triggerScore} ={' '}
+            <strong className="text-white">{sumPts}/100 pts</strong> →{' '}
+            <strong className="text-emerald-400">{setup.winProbability}% Acierto</strong>
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {pillars.map((p, idx) => {
+            const pct = Math.min(100, Math.round((p.val / p.max) * 100));
+            const barColor =
+              pct >= 75 ? 'bg-emerald-500' : pct >= 58 ? 'bg-amber-500' : 'bg-rose-500';
+            return (
+              <div
+                key={idx}
+                className="p-2 rounded-lg bg-[#18110b] border border-[#3b271a] tabular-nums"
+              >
+                <div className="flex items-center justify-between text-[10px] gap-1">
+                  <span className="text-amber-200/70 truncate">{p.label}</span>
+                  <span className="font-bold text-white shrink-0">
+                    {p.val}/{p.max}
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-[#120c08] rounded-full mt-1.5 overflow-hidden">
+                  <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   const handleCopySetup = (setup: TradeSetup) => {
     const text = `
@@ -224,29 +307,49 @@ ${isFuturesMode ? (isEn ? 'CONTRACTS' : 'CONTRATOS') : isEn ? 'LOTS' : 'LOTAJE'}
               </div>
               <p className="text-xs text-amber-200/70 mt-0.5">
                 {isEn
-                  ? 'Simultaneously evaluates all primary CFD indices, Gold, and EUR/USD in real time and highlights the #1 trade with the highest win probability right now.'
-                  : 'Calcula simultáneamente todas las entradas de los índices CFD primarios, Oro y EUR/USD en tiempo real y destaca la operación #1 con mayor índice de acierto en este momento.'}
-                </p>
+                  ? 'Evaluates both BUY and SELL scenarios across all active indices, Gold, and EUR/USD using the 5-Pillar Confluence Engine (100 pts) and highlights the #1 highest win-rate trade.'
+                  : 'Evalúa escenarios de COMPRA y VENTA en todos los índices activos, Oro y EUR/USD mediante los 5 Pilares de Confluencia (100 pts) y destaca la operación #1 con mayor porcentaje de acierto.'}
+              </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => runScanner()}
-            disabled={isScanning}
-            className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition shrink-0 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${isScanning ? 'animate-spin' : ''}`} />
-            <span>
-              {isScanning
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIncludeNews(!includeNews)}
+              className={`px-3 py-2 rounded-xl border font-mono text-xs font-bold transition ${
+                includeNews
+                  ? 'bg-[#120c08] text-emerald-300 border-emerald-600/60'
+                  : 'bg-[#120c08] text-amber-300 border-[#3b271a]'
+              }`}
+            >
+              {includeNews
                 ? isEn
-                  ? 'Scanning Markets...'
-                  : 'Escaneando Mercados...'
+                  ? 'Macro + News: ON'
+                  : 'Confluencia Macro: ACTIVADA'
                 : isEn
-                ? 'Scan & Rank All Now'
-                : 'Escanear Mejor Entrada Ahora'}
-            </span>
-          </button>
+                ? 'Pure Price Action'
+                : 'Solo Técnico (Sin Noticias)'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => runScanner()}
+              disabled={isScanning}
+              className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition shrink-0 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isScanning ? 'animate-spin' : ''}`} />
+              <span>
+                {isScanning
+                  ? isEn
+                    ? 'Scanning Markets...'
+                    : 'Escaneando Mercados...'
+                  : isEn
+                  ? 'Scan & Rank All Now'
+                  : 'Escanear Mejor Entrada Ahora'}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Category Filter Pills */}
@@ -478,6 +581,9 @@ ${isFuturesMode ? (isEn ? 'CONTRACTS' : 'CONTRATOS') : isEn ? 'LOTS' : 'LOTAJE'}
               </div>
             </div>
 
+            {/* 5-Pillar Confluence Verification Bar inside #1 Setup */}
+            {renderConfluencePillars(best)}
+
             {/* Coordinates & Exact Risk Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 font-mono text-xs">
               <div className="p-3 rounded-xl bg-[#120c08] border border-[#3b271a]">
@@ -592,8 +698,8 @@ ${isFuturesMode ? (isEn ? 'CONTRACTS' : 'CONTRATOS') : isEn ? 'LOTS' : 'LOTAJE'}
             </div>
             <span className="text-[11px] font-mono text-amber-200/60">
               {isEn
-                ? 'Click any row to inspect full rationale & confluence meters'
-                : 'Haz clic en cualquier activo para desplegar sus detalles y confluencias'}
+                ? 'Click any row to inspect full rationale & 5-pillar confluence breakdown'
+                : 'Haz clic en cualquier activo para desplegar sus 5 pilares de confluencia y detalles'}
             </span>
           </div>
 
@@ -692,7 +798,7 @@ ${isFuturesMode ? (isEn ? 'CONTRACTS' : 'CONTRATOS') : isEn ? 'LOTS' : 'LOTAJE'}
                             {item.winProbability}%
                           </span>
                           <span className="text-[10px] text-amber-200/50">
-                            ({item.totalConfluenceScore} pts)
+                            ({item.totalConfluenceScore}/100)
                           </span>
                         </div>
                       </div>
@@ -781,6 +887,9 @@ ${isFuturesMode ? (isEn ? 'CONTRACTS' : 'CONTRATOS') : isEn ? 'LOTS' : 'LOTAJE'}
                           </button>
                         </div>
                       </div>
+
+                      {/* 5-Pillar Confluence Breakdown inside Expanded Row */}
+                      {renderConfluencePillars(item)}
 
                       <p className="text-amber-100/90 leading-relaxed">{item.thesisRationale}</p>
 
