@@ -34,9 +34,18 @@ export default function App() {
 
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
+      const savedV5 = localStorage.getItem('trstudio_settings_v5');
+      if (savedV5) {
+        return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(savedV5) };
+      }
       const savedV4 = localStorage.getItem('trstudio_settings_v4');
       if (savedV4) {
-        return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(savedV4) };
+        const parsed = JSON.parse(savedV4);
+        return {
+          ...DEFAULT_APP_SETTINGS,
+          ...parsed,
+          showMt5Tab: false,
+        };
       }
       const savedV3 = localStorage.getItem('trstudio_settings_v3');
       if (savedV3) {
@@ -45,6 +54,7 @@ export default function App() {
           ...DEFAULT_APP_SETTINGS,
           ...parsed,
           theme: 'cream',
+          showMt5Tab: false,
         };
       }
     } catch (e) {
@@ -56,7 +66,7 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', settings.theme);
     try {
-      localStorage.setItem('trstudio_settings_v4', JSON.stringify(settings));
+      localStorage.setItem('trstudio_settings_v5', JSON.stringify(settings));
     } catch (e) {
       console.warn('Could not persist settings:', e);
     }
@@ -264,7 +274,7 @@ export default function App() {
     const hiddenMap: Record<string, boolean> = {
       scanner: !(settings.showScannerTab ?? true),
       strategies: !(settings.showStrategiesTab ?? true),
-      mt5: !(settings.showMt5Tab ?? true),
+      mt5: !(settings.showMt5Tab ?? false),
       newschat: !(settings.showNewsChatTab ?? true),
       reports: !settings.showReportsTab,
       knowledge: !settings.showKnowledgeTab,
@@ -301,8 +311,10 @@ export default function App() {
       ? activeDocs[0].name
       : `${activeDocs.length} Bases Activas`;
 
+  const isMt5Enabled = Boolean(settings.showMt5Tab);
+
   const activeAccountBalance =
-    mt5State?.connected && mt5State.balance > 0
+    isMt5Enabled && mt5State?.connected && mt5State.balance > 0
       ? mt5State.balance
       : settings.defaultBalance;
 
@@ -359,6 +371,7 @@ export default function App() {
             mt5State={mt5State}
             onRefreshMt5={refreshMt5Status}
             onOpenMt5Hub={() => setActiveTab('mt5')}
+            showMt5={isMt5Enabled}
           />
         )}
 
@@ -382,10 +395,11 @@ export default function App() {
             mt5State={mt5State}
             onRefreshMt5={refreshMt5Status}
             onOpenMt5Hub={() => setActiveTab('mt5')}
+            showMt5={isMt5Enabled}
           />
         )}
 
-        {activeTab === 'mt5' && (
+        {activeTab === 'mt5' && isMt5Enabled && (
           <MT5ExecutionHub
             mt5State={mt5State}
             onRefreshMt5={refreshMt5Status}
@@ -457,6 +471,7 @@ export default function App() {
             mt5State={mt5State}
             onRefreshMt5={refreshMt5Status}
             onOpenMt5Hub={() => setActiveTab('mt5')}
+            showMt5={isMt5Enabled}
           />
         )}
       </main>

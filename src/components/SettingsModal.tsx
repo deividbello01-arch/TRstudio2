@@ -746,14 +746,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChange={() => onUpdateSettings({ showStrategiesTab: !(settings.showStrategiesTab ?? true) })}
               />
               <ToggleRow
-                label={isEn ? 'MT5 Auto-Execution Hub Tab' : 'Pestaña Ejecución MT5 en Vivo'}
+                label={
+                  isEn
+                    ? 'MetaTrader 5 (MT5) Module & 1-Click Execution'
+                    : 'Apartado MetaTrader 5 (MT5) y Ejecución 1-Clic'
+                }
                 desc={
                   isEn
-                    ? 'Show MetaTrader 5 session login & live order manager'
-                    : 'Mostrar panel de conexión a MetaTrader 5 y gestión de órdenes'
+                    ? 'Disabled by default. Enable to show MT5 tab, header button, and 1-click order bars'
+                    : 'Desactivado por defecto. Actívalo para mostrar la pestaña MT5 y botones de envío de órdenes'
                 }
-                checked={settings.showMt5Tab ?? true}
-                onChange={() => onUpdateSettings({ showMt5Tab: !(settings.showMt5Tab ?? true) })}
+                checked={settings.showMt5Tab ?? false}
+                onChange={() => onUpdateSettings({ showMt5Tab: !(settings.showMt5Tab ?? false) })}
               />
               <ToggleRow
                 label={isEn ? 'Gemini News Chat Tab' : 'Pestaña Chat de Noticias (Gemini)'}

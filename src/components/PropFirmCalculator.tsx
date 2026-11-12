@@ -25,6 +25,7 @@ interface PropFirmCalculatorProps {
   mt5State?: MT5SessionState | null;
   onRefreshMt5?: () => Promise<void>;
   onOpenMt5Hub?: () => void;
+  showMt5?: boolean;
 }
 
 export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
@@ -38,6 +39,7 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
   mt5State = null,
   onRefreshMt5 = async () => {},
   onOpenMt5Hub,
+  showMt5 = false,
 }) => {
   const isEn = language === 'en';
   const visibleInstruments = getEnabledTradeableInstruments(enabledSymbols, marketMode);
@@ -576,121 +578,123 @@ export const PropFirmCalculator: React.FC<PropFirmCalculatorProps> = ({
         </div>
       </div>
 
-      {/* Price Coordinates & 1-Click MT5 Execution directly from Lot Calculator */}
-      <div className="bg-[#18110b] border border-[#3b271a] rounded-xl p-5 shadow-xl space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-xs sm:text-sm font-bold font-mono uppercase text-white">
-              {isEn
-                ? `Direct MT5 Order Coordinates for ${spec.symbol} (${finalLots} ${isFuturesMode ? 'Contracts' : 'Lots'})`
-                : `Coordenadas de Orden y Ejecución Directa en MT5 para ${spec.symbol} (${finalLots} ${isFuturesMode ? 'Contratos' : 'Lotes'})`}
-            </h3>
-            <p className="text-[11px] text-amber-200/60">
-              {isEn
-                ? 'Choose BUY or SELL and optional Entry Price to execute this exact lot size, SL, TP1, and TP2 in your MT5 session.'
-                : 'Elige Compra o Venta y el precio de entrada (en vivo o personalizado) para ejecutar este lotaje exacto, SL, TP1 y TP2 directo en tu sesión MT5.'}
-            </p>
+      {/* Price Coordinates & 1-Click MT5 Execution directly from Lot Calculator (only when MT5 is enabled in Settings) */}
+      {showMt5 && (
+        <div className="bg-[#18110b] border border-[#3b271a] rounded-xl p-5 shadow-xl space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold font-mono uppercase text-white">
+                {isEn
+                  ? `Direct MT5 Order Coordinates for ${spec.symbol} (${finalLots} ${isFuturesMode ? 'Contracts' : 'Lots'})`
+                  : `Coordenadas de Orden y Ejecución Directa en MT5 para ${spec.symbol} (${finalLots} ${isFuturesMode ? 'Contratos' : 'Lotes'})`}
+              </h3>
+              <p className="text-[11px] text-amber-200/60">
+                {isEn
+                  ? 'Choose BUY or SELL and optional Entry Price to execute this exact lot size, SL, TP1, and TP2 in your MT5 session.'
+                  : 'Elige Compra o Venta y el precio de entrada (en vivo o personalizado) para ejecutar este lotaje exacto, SL, TP1 y TP2 directo en tu sesión MT5.'}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+              <button
+                type="button"
+                onClick={() => setDirection('BUY')}
+                className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 border transition ${
+                  direction === 'BUY'
+                    ? 'bg-emerald-600 text-white border-emerald-400 shadow'
+                    : 'bg-[#120c08] text-amber-200/70 border-[#3b271a]'
+                }`}
+              >
+                <ArrowUpRight className="w-3.5 h-3.5" />
+                <span>{isEn ? 'BUY / LONG' : 'COMPRA (BUY)'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDirection('SELL')}
+                className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 border transition ${
+                  direction === 'SELL'
+                    ? 'bg-rose-600 text-white border-rose-400 shadow'
+                    : 'bg-[#120c08] text-amber-200/70 border-[#3b271a]'
+                }`}
+              >
+                <ArrowDownRight className="w-3.5 h-3.5" />
+                <span>{isEn ? 'SELL / SHORT' : 'VENTA (SELL)'}</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
-            <button
-              type="button"
-              onClick={() => setDirection('BUY')}
-              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 border transition ${
-                direction === 'BUY'
-                  ? 'bg-emerald-600 text-white border-emerald-400 shadow'
-                  : 'bg-[#120c08] text-amber-200/70 border-[#3b271a]'
-              }`}
-            >
-              <ArrowUpRight className="w-3.5 h-3.5" />
-              <span>{isEn ? 'BUY / LONG' : 'COMPRA (BUY)'}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setDirection('SELL')}
-              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 border transition ${
-                direction === 'SELL'
-                  ? 'bg-rose-600 text-white border-rose-400 shadow'
-                  : 'bg-[#120c08] text-amber-200/70 border-[#3b271a]'
-              }`}
-            >
-              <ArrowDownRight className="w-3.5 h-3.5" />
-              <span>{isEn ? 'SELL / SHORT' : 'VENTA (SELL)'}</span>
-            </button>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
+            <div className="p-2.5 rounded-xl bg-[#120c08] border border-[#3b271a]">
+              <label className="text-[10px] uppercase text-amber-200/60 block mb-1">
+                {isEn ? 'Entry Price (Live / Custom)' : 'Precio Entrada (Vivo / Manual)'}
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={customEntryPrice !== '' ? customEntryPrice : entryPrice}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCustomEntryPrice(v === '' ? '' : parseFloat(v));
+                }}
+                className="w-full bg-[#18110b] border border-[#3b271a] rounded-lg px-2.5 py-1 text-xs font-bold text-white focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div className="p-2.5 rounded-xl bg-[#120c08] border border-rose-800/50">
+              <span className="text-[10px] uppercase text-rose-400 block mb-1">
+                Stop Loss ({safeStop} {unitLabel})
+              </span>
+              <span className="text-sm font-black text-rose-300 block">
+                {stopLossPrice.toFixed(spec.decimals)}
+              </span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-[#120c08] border border-emerald-800/50">
+              <span className="text-[10px] uppercase text-emerald-400 block mb-1">
+                Take Profit 1 (1:{rewardRatio1})
+              </span>
+              <span className="text-sm font-black text-emerald-300 block">
+                {tp1Price.toFixed(spec.decimals)}
+              </span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-[#120c08] border border-emerald-800/50">
+              <span className="text-[10px] uppercase text-emerald-400 block mb-1">
+                Take Profit 2 (1:{rewardRatio2})
+              </span>
+              <span className="text-sm font-black text-emerald-400 block">
+                {tp2Price.toFixed(spec.decimals)}
+              </span>
+            </div>
           </div>
+
+          <MT5OneClickBar
+            setup={{
+              asset: spec.symbol,
+              action: direction,
+              playbookName: isEn
+                ? `Quant Lot Calculator (${safeRiskPct}% Risk)`
+                : `Calculadora Cuantitativa (${safeRiskPct}% Riesgo)`,
+              prices: {
+                currentPrice: roundToTick(feedPrice, spec),
+                entryPrice,
+                stopLoss: stopLossPrice,
+                takeProfit1: tp1Price,
+                takeProfit2: tp2Price,
+              },
+              propFirmRiskCalculation: {
+                accountBalance: safeBalance,
+                recommendedLots: finalLots,
+                riskPercentage: safeRiskPct,
+                monetaryRiskUsd: Number(targetMonetaryRisk.toFixed(2)),
+                actualRiskAtStopUsd: Number(actualMonetaryLossAtStop.toFixed(2)),
+              },
+            }}
+            mt5State={mt5State}
+            onRefreshMt5={onRefreshMt5}
+            onOpenMt5Hub={onOpenMt5Hub}
+            language={language}
+            compact
+          />
         </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
-          <div className="p-2.5 rounded-xl bg-[#120c08] border border-[#3b271a]">
-            <label className="text-[10px] uppercase text-amber-200/60 block mb-1">
-              {isEn ? 'Entry Price (Live / Custom)' : 'Precio Entrada (Vivo / Manual)'}
-            </label>
-            <input
-              type="number"
-              step="any"
-              value={customEntryPrice !== '' ? customEntryPrice : entryPrice}
-              onChange={(e) => {
-                const v = e.target.value;
-                setCustomEntryPrice(v === '' ? '' : parseFloat(v));
-              }}
-              className="w-full bg-[#18110b] border border-[#3b271a] rounded-lg px-2.5 py-1 text-xs font-bold text-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
-          <div className="p-2.5 rounded-xl bg-[#120c08] border border-rose-800/50">
-            <span className="text-[10px] uppercase text-rose-400 block mb-1">
-              Stop Loss ({safeStop} {unitLabel})
-            </span>
-            <span className="text-sm font-black text-rose-300 block">
-              {stopLossPrice.toFixed(spec.decimals)}
-            </span>
-          </div>
-          <div className="p-2.5 rounded-xl bg-[#120c08] border border-emerald-800/50">
-            <span className="text-[10px] uppercase text-emerald-400 block mb-1">
-              Take Profit 1 (1:{rewardRatio1})
-            </span>
-            <span className="text-sm font-black text-emerald-300 block">
-              {tp1Price.toFixed(spec.decimals)}
-            </span>
-          </div>
-          <div className="p-2.5 rounded-xl bg-[#120c08] border border-emerald-800/50">
-            <span className="text-[10px] uppercase text-emerald-400 block mb-1">
-              Take Profit 2 (1:{rewardRatio2})
-            </span>
-            <span className="text-sm font-black text-emerald-400 block">
-              {tp2Price.toFixed(spec.decimals)}
-            </span>
-          </div>
-        </div>
-
-        <MT5OneClickBar
-          setup={{
-            asset: spec.symbol,
-            action: direction,
-            playbookName: isEn
-              ? `Quant Lot Calculator (${safeRiskPct}% Risk)`
-              : `Calculadora Cuantitativa (${safeRiskPct}% Riesgo)`,
-            prices: {
-              currentPrice: roundToTick(feedPrice, spec),
-              entryPrice,
-              stopLoss: stopLossPrice,
-              takeProfit1: tp1Price,
-              takeProfit2: tp2Price,
-            },
-            propFirmRiskCalculation: {
-              accountBalance: safeBalance,
-              recommendedLots: finalLots,
-              riskPercentage: safeRiskPct,
-              monetaryRiskUsd: Number(targetMonetaryRisk.toFixed(2)),
-              actualRiskAtStopUsd: Number(actualMonetaryLossAtStop.toFixed(2)),
-            },
-          }}
-          mt5State={mt5State}
-          onRefreshMt5={onRefreshMt5}
-          onOpenMt5Hub={onOpenMt5Hub}
-          language={language}
-          compact
-        />
-      </div>
+      )}
     </div>
   );
 };

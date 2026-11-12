@@ -575,26 +575,31 @@ export const MarketTerminal: React.FC<MarketTerminalProps> = ({
           {settings.showMacroBar && macroInstruments.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
               {macroInstruments.map((inst) => {
+                const isSelected = selectedSymbol === inst.symbol;
                 const tickUp = inst.lastTickDirection === 'up';
                 const tickDown = inst.lastTickDirection === 'down';
                 return (
                   <div
                     key={inst.symbol}
                     onClick={() => setSelectedSymbol(inst.symbol)}
-                    className="p-2.5 rounded-lg bg-[#160f0a] hover:bg-[#1f150e] border border-[#3b271a] cursor-pointer transition flex items-center justify-between font-mono text-xs"
+                    className={`p-2.5 rounded-lg border cursor-pointer transition flex items-center justify-between font-mono text-xs ${
+                      isSelected
+                        ? 'bg-[#2b1c13] border-amber-500 shadow-md ring-1 ring-amber-500/40'
+                        : 'bg-[#160f0a] hover:bg-[#1f150e] border-[#3b271a]'
+                    }`}
                   >
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                           tickUp ? 'bg-emerald-400' : tickDown ? 'bg-rose-400' : 'bg-amber-400'
                         }`}
                       />
-                      <span className="text-amber-300 font-bold">{inst.symbol}</span>
-                      <span className="text-[11px] text-amber-200/60 hidden sm:inline">
+                      <span className="text-amber-300 font-bold shrink-0">{inst.symbol}</span>
+                      <span className="text-[11px] text-amber-200/60 truncate hidden sm:inline">
                         ({inst.name})
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <span
                         className={`font-bold transition-colors duration-300 ${
                           tickUp ? 'text-emerald-300' : tickDown ? 'text-rose-300' : 'text-white'

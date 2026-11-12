@@ -40,6 +40,7 @@ interface MultiIndexScannerProps {
   mt5State?: MT5SessionState | null;
   onRefreshMt5?: () => Promise<void>;
   onOpenMt5Hub?: () => void;
+  showMt5?: boolean;
 }
 
 export const MultiIndexScanner: React.FC<MultiIndexScannerProps> = ({
@@ -53,6 +54,7 @@ export const MultiIndexScanner: React.FC<MultiIndexScannerProps> = ({
   mt5State = null,
   onRefreshMt5 = async () => {},
   onOpenMt5Hub,
+  showMt5 = false,
 }) => {
   const isEn = language === 'en';
   const [accountBalance, setAccountBalance] = useState<number>(defaultBalance);
@@ -674,13 +676,15 @@ ${isFuturesMode ? (isEn ? 'CONTRACTS' : 'CONTRATOS') : isEn ? 'LOTS' : 'LOTAJE'}
           </div>
 
           {/* 1-Click MetaTrader 5 Auto-Execution Bar for #1 Setup */}
-          <MT5OneClickBar
-            setup={best}
-            mt5State={mt5State}
-            onRefreshMt5={onRefreshMt5}
-            onOpenMt5Hub={onOpenMt5Hub}
-            language={language}
-          />
+          {showMt5 && (
+            <MT5OneClickBar
+              setup={best}
+              mt5State={mt5State}
+              onRefreshMt5={onRefreshMt5}
+              onOpenMt5Hub={onOpenMt5Hub}
+              language={language}
+            />
+          )}
         </div>
       )}
 
@@ -805,14 +809,16 @@ ${isFuturesMode ? (isEn ? 'CONTRACTS' : 'CONTRATOS') : isEn ? 'LOTS' : 'LOTAJE'}
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <MT5OneClickBar
-                        setup={item}
-                        mt5State={mt5State}
-                        onRefreshMt5={onRefreshMt5}
-                        onOpenMt5Hub={onOpenMt5Hub}
-                        language={language}
-                        compact={true}
-                      />
+                      {showMt5 && (
+                        <MT5OneClickBar
+                          setup={item}
+                          mt5State={mt5State}
+                          onRefreshMt5={onRefreshMt5}
+                          onOpenMt5Hub={onOpenMt5Hub}
+                          language={language}
+                          compact={true}
+                        />
+                      )}
                       <span
                         className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border hidden md:inline-block ${colors.badge}`}
                       >
@@ -843,14 +849,16 @@ ${isFuturesMode ? (isEn ? 'CONTRACTS' : 'CONTRATOS') : isEn ? 'LOTS' : 'LOTAJE'}
                           {item.playbookName}
                         </span>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <MT5OneClickBar
-                            setup={item}
-                            mt5State={mt5State}
-                            onRefreshMt5={onRefreshMt5}
-                            onOpenMt5Hub={onOpenMt5Hub}
-                            language={language}
-                            compact={true}
-                          />
+                          {showMt5 && (
+                            <MT5OneClickBar
+                              setup={item}
+                              mt5State={mt5State}
+                              onRefreshMt5={onRefreshMt5}
+                              onOpenMt5Hub={onOpenMt5Hub}
+                              language={language}
+                              compact={true}
+                            />
+                          )}
                           {onSelectAssetInChart && (
                             <button
                               type="button"

@@ -94,10 +94,11 @@ export const INSTRUMENTS: InstrumentSpec[] = [
     chart: {
       primary: 'PEPPERSTONE:NAS100',
       alternates: [
-        { name: 'Pepperstone NAS100', symbol: 'PEPPERSTONE:NAS100' },
-        { name: 'Capital.com US100', symbol: 'CAPITALCOM:US100' },
-        { name: 'OANDA NAS100USD', symbol: 'OANDA:NAS100USD' },
-        { name: 'Nasdaq 100 (NDX)', symbol: 'NASDAQ:NDX' },
+        { name: 'Pepperstone NAS100 (US100)', symbol: 'PEPPERSTONE:NAS100' },
+        { name: 'Capital.com NAS100 (US100)', symbol: 'CAPITALCOM:NAS100' },
+        { name: 'Forex.com NAS100 (US100)', symbol: 'FOREXCOM:NAS100' },
+        { name: 'FXCM NAS100 (US100)', symbol: 'FX:NAS100' },
+        { name: 'Skilling US100', symbol: 'SKILLING:US100' },
       ],
     },
     decimals: 1,
@@ -124,9 +125,9 @@ export const INSTRUMENTS: InstrumentSpec[] = [
       primary: 'PEPPERSTONE:US500',
       alternates: [
         { name: 'Pepperstone US500', symbol: 'PEPPERSTONE:US500' },
-        { name: 'Capital.com US500', symbol: 'CAPITALCOM:US500' },
-        { name: 'OANDA SPX500USD', symbol: 'OANDA:SPX500USD' },
-        { name: 'S&P 500 (SPX)', symbol: 'SP:SPX' },
+        { name: 'Capital.com SPX500 (US500)', symbol: 'CAPITALCOM:SPX500' },
+        { name: 'Forex.com SPX500 (US500)', symbol: 'FOREXCOM:SPX500' },
+        { name: 'FXCM SPX500', symbol: 'FX:SPX500' },
       ],
     },
     decimals: 1,
@@ -152,6 +153,7 @@ export const INSTRUMENTS: InstrumentSpec[] = [
       alternates: [
         { name: 'Pepperstone US30', symbol: 'PEPPERSTONE:US30' },
         { name: 'Capital.com US30', symbol: 'CAPITALCOM:US30' },
+        { name: 'Forex.com US30', symbol: 'FOREXCOM:US30' },
         { name: 'OANDA US30USD', symbol: 'OANDA:US30USD' },
       ],
     },
@@ -179,8 +181,8 @@ export const INSTRUMENTS: InstrumentSpec[] = [
       primary: 'PEPPERSTONE:US2000',
       alternates: [
         { name: 'Pepperstone US2000', symbol: 'PEPPERSTONE:US2000' },
-        { name: 'Russell 2000 (RUT)', symbol: 'TVC:RUT' },
-        { name: 'Capital.com RTY', symbol: 'CAPITALCOM:RTY' },
+        { name: 'Forex.com US2000', symbol: 'FOREXCOM:US2000' },
+        { name: 'FXCM US2000', symbol: 'FX:US2000' },
       ],
     },
     decimals: 1,
@@ -205,9 +207,9 @@ export const INSTRUMENTS: InstrumentSpec[] = [
       primary: 'PEPPERSTONE:GER40',
       alternates: [
         { name: 'Pepperstone GER40', symbol: 'PEPPERSTONE:GER40' },
-        { name: 'Capital.com DE40', symbol: 'CAPITALCOM:DE40' },
+        { name: 'Capital.com GER40', symbol: 'CAPITALCOM:GER40' },
+        { name: 'Forex.com GER40', symbol: 'FOREXCOM:GER40' },
         { name: 'OANDA DE30EUR', symbol: 'OANDA:DE30EUR' },
-        { name: 'DAX (XETR)', symbol: 'XETR:DAX' },
       ],
     },
     decimals: 1,
@@ -235,7 +237,7 @@ export const INSTRUMENTS: InstrumentSpec[] = [
       alternates: [
         { name: 'Pepperstone UK100', symbol: 'PEPPERSTONE:UK100' },
         { name: 'Capital.com UK100', symbol: 'CAPITALCOM:UK100' },
-        { name: 'FTSE 100 (UKX)', symbol: 'TVC:UKX' },
+        { name: 'Forex.com UK100', symbol: 'FOREXCOM:UK100' },
       ],
     },
     decimals: 1,
@@ -263,7 +265,7 @@ export const INSTRUMENTS: InstrumentSpec[] = [
       alternates: [
         { name: 'Pepperstone EUSTX50', symbol: 'PEPPERSTONE:EUSTX50' },
         { name: 'Capital.com EU50', symbol: 'CAPITALCOM:EU50' },
-        { name: 'Euro Stoxx 50 (SX5E)', symbol: 'TVC:SX5E' },
+        { name: 'Forex.com EU50', symbol: 'FOREXCOM:EU50' },
       ],
     },
     decimals: 1,
@@ -289,8 +291,8 @@ export const INSTRUMENTS: InstrumentSpec[] = [
       primary: 'PEPPERSTONE:FRA40',
       alternates: [
         { name: 'Pepperstone FRA40', symbol: 'PEPPERSTONE:FRA40' },
-        { name: 'Capital.com FR40', symbol: 'CAPITALCOM:FR40' },
-        { name: 'CAC 40 (Euronext)', symbol: 'TVC:CAC40' },
+        { name: 'Forex.com FRA40', symbol: 'FOREXCOM:FRA40' },
+        { name: 'FXCM FRA40', symbol: 'FX:FRA40' },
       ],
     },
     decimals: 1,
@@ -317,8 +319,8 @@ export const INSTRUMENTS: InstrumentSpec[] = [
       primary: 'PEPPERSTONE:JPN225',
       alternates: [
         { name: 'Pepperstone JPN225', symbol: 'PEPPERSTONE:JPN225' },
-        { name: 'Capital.com J225', symbol: 'CAPITALCOM:J225' },
-        { name: 'Nikkei 225 (NI225)', symbol: 'TVC:NI225' },
+        { name: 'Forex.com JP225', symbol: 'FOREXCOM:JP225' },
+        { name: 'IC Markets JP225', symbol: 'IC:JP225' },
       ],
     },
     decimals: 0,
@@ -343,6 +345,8 @@ export const INSTRUMENTS: InstrumentSpec[] = [
       primary: 'PEPPERSTONE:HK50',
       alternates: [
         { name: 'Pepperstone HK50', symbol: 'PEPPERSTONE:HK50' },
+        { name: 'Capital.com HK50', symbol: 'CAPITALCOM:HK50' },
+        { name: 'Forex.com HK50', symbol: 'FOREXCOM:HK50' },
         { name: 'OANDA HK33HKD', symbol: 'OANDA:HK33HKD' },
       ],
     },
@@ -368,7 +372,7 @@ export const INSTRUMENTS: InstrumentSpec[] = [
       primary: 'OANDA:XAUUSD',
       alternates: [
         { name: 'OANDA XAUUSD', symbol: 'OANDA:XAUUSD' },
-        { name: 'Capital.com Gold', symbol: 'CAPITALCOM:GOLD' },
+        { name: 'Pepperstone XAUUSD', symbol: 'PEPPERSTONE:XAUUSD' },
         { name: 'Forex.com XAUUSD', symbol: 'FX:XAUUSD' },
       ],
     },
@@ -440,6 +444,7 @@ export const INSTRUMENTS: InstrumentSpec[] = [
       primary: 'CAPITALCOM:DXY',
       alternates: [
         { name: 'Capital.com DXY', symbol: 'CAPITALCOM:DXY' },
+        { name: 'Tickmill DXY', symbol: 'TICKMILL:DXY' },
         { name: 'AMEX UUP (ETF Dólar)', symbol: 'AMEX:UUP' },
       ],
     },
@@ -462,11 +467,14 @@ export const INSTRUMENTS: InstrumentSpec[] = [
     region: 'US',
     tv: 'TVC:US10Y',
     chart: {
-      primary: 'TVC:US10Y',
+      primary: 'PYTH:US10Y',
       alternates: [
-        { name: 'US10Y (TVC)', symbol: 'TVC:US10Y' },
-        { name: 'NASDAQ:IEF (Bono 7-10Y)', symbol: 'NASDAQ:IEF' },
-        { name: 'NASDAQ:TLT (Bono 20Y+)', symbol: 'NASDAQ:TLT' },
+        { name: 'Pyth US10Y (Rendimiento % en Vivo)', symbol: 'PYTH:US10Y' },
+        { name: 'FP Markets US10YR (Futuro Bono 10Y)', symbol: 'FPMARKETS:US10YR' },
+        { name: 'NASDAQ:UTEN (Nota Tesoro 10 Años)', symbol: 'NASDAQ:UTEN' },
+        { name: 'NASDAQ:IEF (Bono Tesoro 7-10Y)', symbol: 'NASDAQ:IEF' },
+        { name: 'AMEX:TBT (ETF Rendimiento Bono)', symbol: 'AMEX:TBT' },
+        { name: 'NASDAQ:TLT (Bono Tesoro 20Y+)', symbol: 'NASDAQ:TLT' },
       ],
     },
     decimals: 3,
@@ -491,6 +499,8 @@ export const INSTRUMENTS: InstrumentSpec[] = [
       primary: 'CAPITALCOM:VIX',
       alternates: [
         { name: 'Capital.com VIX', symbol: 'CAPITALCOM:VIX' },
+        { name: 'Pepperstone VIX', symbol: 'PEPPERSTONE:VIX' },
+        { name: 'Tickmill VIX', symbol: 'TICKMILL:VIX' },
         { name: 'AMEX VIXY (futuros VIX)', symbol: 'AMEX:VIXY' },
       ],
     },

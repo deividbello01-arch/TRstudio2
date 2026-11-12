@@ -49,6 +49,7 @@ interface TradeSetupEngineProps {
   mt5State?: MT5SessionState | null;
   onRefreshMt5?: () => Promise<void>;
   onOpenMt5Hub?: () => void;
+  showMt5?: boolean;
 }
 
 export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
@@ -67,6 +68,7 @@ export const TradeSetupEngine: React.FC<TradeSetupEngineProps> = ({
   mt5State = null,
   onRefreshMt5 = async () => {},
   onOpenMt5Hub,
+  showMt5 = false,
 }) => {
   const isEn = language === 'en';
   const currentDecimalHourNY = React.useMemo(() => {
@@ -1190,13 +1192,15 @@ ${isEn ? 'Invalidation' : 'Invalidación'}: ${tradeSetup.invalidationCriteria}
           </div>
 
           {/* 1-Click MetaTrader 5 Auto-Execution Bar */}
-          <MT5OneClickBar
-            setup={tradeSetup}
-            mt5State={mt5State}
-            onRefreshMt5={onRefreshMt5}
-            onOpenMt5Hub={onOpenMt5Hub}
-            language={language}
-          />
+          {showMt5 && (
+            <MT5OneClickBar
+              setup={tradeSetup}
+              mt5State={mt5State}
+              onRefreshMt5={onRefreshMt5}
+              onOpenMt5Hub={onOpenMt5Hub}
+              language={language}
+            />
+          )}
 
           {/* Coordinates */}
           <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#120c08] border-b border-[#3b271a]">

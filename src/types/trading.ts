@@ -353,5 +353,5 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   showKnowledgeTab: true,
   showCalculatorTab: true,
   showNewsChatTab: true,
-  showMt5Tab: true,
+  showMt5Tab: false,
 };

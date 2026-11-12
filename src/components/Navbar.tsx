@@ -169,7 +169,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       label: isEn ? 'MT5 Live' : 'MT5 En Vivo',
       icon: Terminal,
       badge: mt5Badge,
-      visible: settings.showMt5Tab ?? true,
+      visible: settings.showMt5Tab ?? false,
     },
     {
       id: 'strategies',
@@ -275,23 +275,25 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Mobile MT5 Status & Settings Button (visible on < lg) */}
           <div className="flex lg:hidden items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setActiveTab('mt5')}
-              className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 transition shrink-0 ${
-                mt5State?.connected
-                  ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/60'
-                  : 'bg-[#24170f] text-amber-300 border-[#4d3221]'
-              }`}
-            >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  mt5State?.connected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'
+            {settings.showMt5Tab && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('mt5')}
+                className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 transition shrink-0 ${
+                  mt5State?.connected
+                    ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/60'
+                    : 'bg-[#24170f] text-amber-300 border-[#4d3221]'
                 }`}
-              />
-              <Terminal className="w-3.5 h-3.5" />
-              <span>MT5</span>
-            </button>
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    mt5State?.connected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'
+                  }`}
+                />
+                <Terminal className="w-3.5 h-3.5" />
+                <span>MT5</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onOpenSettings}
@@ -361,36 +363,38 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('mt5')}
-              title={
-                mt5State?.connected
-                  ? `MT5 Activo: ${mt5State.brokerServer} (#${mt5State.login})`
-                  : isEn
-                  ? 'Open MT5 Broker Session & Auto-Execution'
-                  : 'Abrir Sesión de Broker MT5 y Auto-Ejecución'
-              }
-              className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 transition shrink-0 ${
-                mt5State?.connected
-                  ? 'bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 border-emerald-500/70'
-                  : 'bg-[#24170f] hover:bg-[#332116] text-amber-300 border-[#4d3221] hover:border-amber-500'
-              }`}
-            >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  mt5State?.connected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'
+            {settings.showMt5Tab && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('mt5')}
+                title={
+                  mt5State?.connected
+                    ? `MT5 Activo: ${mt5State.brokerServer} (#${mt5State.login})`
+                    : isEn
+                    ? 'Open MT5 Broker Session & Auto-Execution'
+                    : 'Abrir Sesión de Broker MT5 y Auto-Ejecución'
+                }
+                className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 transition shrink-0 ${
+                  mt5State?.connected
+                    ? 'bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 border-emerald-500/70'
+                    : 'bg-[#24170f] hover:bg-[#332116] text-amber-300 border-[#4d3221] hover:border-amber-500'
                 }`}
-              />
-              <Terminal className="w-3.5 h-3.5" />
-              <span>
-                {mt5State?.connected
-                  ? `MT5: ${mt5State.brokerPreset}`
-                  : isEn
-                  ? 'Connect MT5'
-                  : 'Conectar MT5'}
-              </span>
-            </button>
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    mt5State?.connected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'
+                  }`}
+                />
+                <Terminal className="w-3.5 h-3.5" />
+                <span>
+                  {mt5State?.connected
+                    ? `MT5: ${mt5State.brokerPreset}`
+                    : isEn
+                    ? 'Connect MT5'
+                    : 'Conectar MT5'}
+                </span>
+              </button>
+            )}
 
             <button
               type="button"
